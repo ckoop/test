@@ -3,6 +3,7 @@ import dayjs from 'dayjs'
 import 'dayjs/locale/de'
 import { api } from '../api'
 import { fmtMinutes, fmtTime } from '../hooks/useTimer'
+import { useProjectNames } from '../hooks/useProjects'
 import OvertimeBanner from './OvertimeBanner'
 import { ManualEntryModal } from './ManualEntryModal'
 
@@ -14,6 +15,9 @@ export default function HistoryPage() {
   const [from, setFrom]         = useState(dayjs().subtract(30, 'day').format('YYYY-MM-DD'))
   const [to, setTo]             = useState(dayjs().format('YYYY-MM-DD'))
   const [showManual, setShowManual] = useState(false)
+  const [projectFilter, setProjectFilter] = useState('')
+  const [taskFilter, setTaskFilter]       = useState('')
+  const { names: projectNames } = useProjectNames()
 
   const load = () => {
     setLoading(true)
@@ -22,7 +26,12 @@ export default function HistoryPage() {
 
   useEffect(() => { load() }, [from, to])
 
-  const finished = entries.filter(e => e.end_time)
+  const taskQuery = taskFilter.trim().toLowerCase()
+  const finished = entries.filter(e =>
+    e.end_time &&
+    (!projectFilter || e.project === projectFilter) &&
+    (!taskQuery || (e.description || '').toLowerCase().includes(taskQuery))
+  )
   const total    = finished.reduce((s, e) => s + (e.duration_minutes || 0), 0)
 
   const grouped  = finished.reduce((acc, e) => {
@@ -49,9 +58,25 @@ export default function HistoryPage() {
             <input type="date" value={to} onChange={e => setTo(e.target.value)} />
           </div>
         </div>
+        <div className="grid2" style={{ marginBottom: 10 }}>
+          <div>
+            <div className="label" style={{ marginBottom: 5 }}>Projekt</div>
+            <select value={projectFilter} onChange={e => setProjectFilter(e.target.value)}>
+              <option value="">Alle Projekte</option>
+              {projectNames.map(name => <option key={name} value={name}>{name}</option>)}
+            </select>
+          </div>
+          <div>
+            <div className="label" style={{ marginBottom: 5 }}>Aufgabe</div>
+            <input type="text" placeholder="Suche…" value={taskFilter} onChange={e => setTaskFilter(e.target.value)} />
+          </div>
+        </div>
         <div className="flex items-center justify-between">
           <div className="mono" style={{ fontSize: 11, color: 'var(--text2)' }}>{finished.length} Einträge · {fmtMinutes(total)}</div>
           <div style={{ display: 'flex', gap: 5 }}>
+            {(projectFilter || taskFilter) && (
+              <button className="btn btn-ghost" onClick={() => { setProjectFilter(''); setTaskFilter('') }}>Filter zurücksetzen</button>
+            )}
             <button className="btn btn-ghost" onClick={() => { setFrom(dayjs().subtract(7,'day').format('YYYY-MM-DD')); setTo(dayjs().format('YYYY-MM-DD')) }}>7 Tage</button>
             <button className="btn btn-ghost" onClick={() => { setFrom(dayjs().subtract(30,'day').format('YYYY-MM-DD')); setTo(dayjs().format('YYYY-MM-DD')) }}>30 Tage</button>
           </div>
