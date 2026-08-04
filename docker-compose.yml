@@ -1,0 +1,55 @@
+version: "3.9"
+
+services:
+
+  # ── Backend (FastAPI) ────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+    container_name: timetracker-backend
+    restart: unless-stopped
+    volumes:
+      - timetracker-data:/data
+    environment:
+      - DATABASE_URL=sqlite:////data/timetracker.db
+      # ── SMTP (ausgehende E-Mails) ──────────────────────────────────────────
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASSWORD=${SMTP_PASSWORD:-}
+      - SMTP_TLS=${SMTP_TLS:-true}
+      - MAIL_FROM=${MAIL_FROM:-}
+      - MAIL_TO=${MAIL_TO:-}
+      # ── IMAP (eingehende E-Mails) ──────────────────────────────────────────
+      - IMAP_HOST=${IMAP_HOST:-}
+      - IMAP_PORT=${IMAP_PORT:-993}
+      - IMAP_USER=${IMAP_USER:-}
+      - IMAP_PASSWORD=${IMAP_PASSWORD:-}
+      - IMAP_FOLDER=${IMAP_FOLDER:-INBOX}
+      - IMAP_POLL_INTERVAL=${IMAP_POLL_INTERVAL:-300}
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Frontend (Nginx: static files + reverse proxy zu /api) ──────────────────
+  frontend:
+    build:
+      context: ./frontend
+    container_name: timetracker-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - app
+
+volumes:
+  timetracker-data:
+
+networks:
+  app:
