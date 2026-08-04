@@ -74,7 +74,7 @@ export default function App() {
 function Sidebar({ hasActive, badges }) {
   return (
     <aside className="sidebar">
-      <div className="sidebar-logo">Time<br />Tracker</div>
+      <div className="sidebar-logo">Epoch</div>
       <div className="sidebar-version">{APP_VERSION}</div>
       <nav className="sidebar-nav">
         {NAV.map(({ to, label, Icon }) => (

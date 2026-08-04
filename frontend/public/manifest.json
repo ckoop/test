@@ -1,6 +1,6 @@
 {
-  "name": "TimeTracker",
-  "short_name": "TimeTracker",
+  "name": "Epoch",
+  "short_name": "Epoch",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0a",

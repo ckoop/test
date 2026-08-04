@@ -12,7 +12,7 @@ from email.mime.text import MIMEText
 import smtplib, ssl
 
 logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("timetracker")
+log = logging.getLogger("epoch")
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./timetracker.db")
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
@@ -201,7 +201,7 @@ def mail_configured():
 
 # ── App ─────────────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="TimeTracker API", version="3.0.0")
+app = FastAPI(title="Epoch API", version="3.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 def get_db():
@@ -519,7 +519,7 @@ def _build_report_html(day: date, entries: list, note, total_minutes: float) -> 
     </table>
     {note_html}
     <div style="margin-top:32px;font-size:11px;color:#444;border-top:1px solid #1a1a1a;padding-top:16px;">
-      Gesendet von TimeTracker · {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC
+      Gesendet von Epoch · {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC
     </div>
   </div>
 </body></html>"""
@@ -532,7 +532,7 @@ def _build_error_reply_html(original_subject: str, err: "MailParseError") -> str
 <body style="background:#0a0a0a;color:#e8e4dc;font-family:'Helvetica Neue',Arial,sans-serif;padding:32px;margin:0;">
   <div style="max-width:600px;margin:0 auto;">
     <div style="margin-bottom:20px;">
-      <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:4px;">TimeTracker · Import fehlgeschlagen</div>
+      <div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:4px;">Epoch · Import fehlgeschlagen</div>
       <h1 style="font-size:22px;font-weight:800;letter-spacing:-0.03em;color:#ff4444;margin:0;">Fehler beim Importieren</h1>
     </div>
 
@@ -568,7 +568,7 @@ def _build_error_reply_html(original_subject: str, err: "MailParseError") -> str
     </div>
 
     <div style="font-size:11px;color:#444;border-top:1px solid #1a1a1a;padding-top:14px;">
-      Keine Einträge wurden importiert · TimeTracker · {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC
+      Keine Einträge wurden importiert · Epoch · {datetime.utcnow().strftime('%Y-%m-%d %H:%M')} UTC
     </div>
   </div>
 </body></html>"""
