@@ -10,10 +10,11 @@ import ExportPage  from './pages/ExportPage'
 import MailPage      from './pages/MailPage'
 import SettingsPage from './pages/SettingsPage'
 import { api } from './api'
+import { useTimer, fmtDuration } from './hooks/useTimer'
 
 dayjs.extend(isoWeek)
 
-export const APP_VERSION = 'v3.4'
+export const APP_VERSION = 'v3.6'
 
 const NAV = [
   { to: '/',        label: 'Timer',   Icon: IcoTimer   },
@@ -29,6 +30,7 @@ export default function App() {
   const [activeTimer, setActiveTimer] = useState(null)
   const [statsYear, setStatsYear]   = useState(dayjs().year())
   const [statsMonth, setStatsMonth] = useState(dayjs().month() + 1)
+  const [historyProject, setHistoryProject] = useState('')
   const [imapConfigured, setImapConfigured] = useState(null)
   useEffect(() => { api.getActive().then(setActiveTimer).catch(() => {}) }, [])
   useEffect(() => { api.getMailConfig().then(c => setImapConfigured(!!c?.imap?.configured)).catch(() => {}) }, [])
@@ -41,7 +43,9 @@ export default function App() {
   )
 
   const badges = {
+    '/': activeTimer ? <RunningBadge startTime={activeTimer.start_time} /> : null,
     '/woche': `KW ${dayjs().isoWeek()}`,
+    '/verlauf': historyProject || 'Alle Projekte',
     '/stats': `${MONTHS[statsMonth - 1]} ${statsYear}`,
     '/mail': mailBadge,
   }
@@ -59,7 +63,7 @@ export default function App() {
         <Routes>
           <Route path="/"        element={<TimerPage   activeTimer={activeTimer} setActiveTimer={setActiveTimer} />} />
           <Route path="/woche"   element={<WeekPage />} />
-          <Route path="/verlauf" element={<HistoryPage />} />
+          <Route path="/verlauf" element={<HistoryPage projectFilter={historyProject} setProjectFilter={setHistoryProject} />} />
           <Route path="/stats"   element={<StatsPage year={statsYear} month={statsMonth} setYear={setStatsYear} setMonth={setStatsMonth} />} />
           <Route path="/mail"    element={<MailPage />} />
           <Route path="/export"   element={<ExportPage />} />
@@ -69,6 +73,11 @@ export default function App() {
       <BottomNav hasActive={!!activeTimer} badges={mobileBadges} />
     </div>
   )
+}
+
+function RunningBadge({ startTime }) {
+  const elapsed = useTimer(startTime)
+  return <>{fmtDuration(elapsed)}</>
 }
 
 function Sidebar({ hasActive, badges }) {

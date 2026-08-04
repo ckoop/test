@@ -9,14 +9,13 @@ import { ManualEntryModal } from './ManualEntryModal'
 
 dayjs.locale('de')
 
-export default function HistoryPage() {
+export default function HistoryPage({ projectFilter, setProjectFilter }) {
   const [entries, setEntries]   = useState([])
   const [loading, setLoading]   = useState(true)
   const [from, setFrom]         = useState(dayjs().subtract(30, 'day').format('YYYY-MM-DD'))
   const [to, setTo]             = useState(dayjs().format('YYYY-MM-DD'))
   const [showManual, setShowManual] = useState(false)
-  const [projectFilter, setProjectFilter] = useState('')
-  const [taskFilter, setTaskFilter]       = useState('')
+  const [taskFilter, setTaskFilter] = useState('')
   const { names: projectNames } = useProjectNames()
 
   const load = () => {
