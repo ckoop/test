@@ -1,0 +1,23 @@
+# Lokale Projekt-Doku für Claude Code — nicht für den Remote-Push bestimmt
+claude.md
+
+# Persönliche Zeiterfassungs-Rohdaten
+*.csv
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Datenbank
+*.db
+*.sqlite
+*.sqlite3
+
+# Dependencies / Build
+node_modules/
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
