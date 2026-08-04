@@ -269,7 +269,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);-webkit-font
           <span style="color:var(--text3);cursor:pointer;font-size:11px;" onclick="openModal('edit')">✏</span>
         </div>
         <div class="psm prow" style="border-color:rgba(255,170,0,.15);">
-          <div style="flex:1;min-width:0;"><div class="prow" style="gap:4px;margin-bottom:2px;"><span class="pmono" style="font-size:9px;color:var(--text2);">14:00–16:30</span><span class="ptag tg">BR442</span><span class="ptag ta">E-Mail</span></div><div style="font-size:10px;color:var(--text3);">Roadmap Q3</div></div>
+          <div style="flex:1;min-width:0;"><div class="prow" style="gap:4px;margin-bottom:2px;"><span class="pmono" style="font-size:9px;color:var(--text2);">14:00–16:30</span><span class="ptag tg">Support</span><span class="ptag ta">E-Mail</span></div><div style="font-size:10px;color:var(--text3);">Roadmap Q3</div></div>
           <span class="pmono" style="font-size:11px;flex-shrink:0;" id="last-entry-dur">2h 30m</span>
           <span style="color:var(--text3);cursor:pointer;font-size:11px;" onclick="openModal('edit')">✏</span>
         </div>
@@ -525,7 +525,7 @@ body{font-family:var(--sans);background:var(--bg);color:var(--text);-webkit-font
         <div style="background:var(--bg3);border:.5px solid rgba(200,240,96,.2);border-radius:var(--r);padding:10px 11px;"><div class="prow" style="gap:5px;margin-bottom:3px;"><div style="width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0;"></div><div class="plbl">SMTP</div></div><div class="pmono" style="font-size:9px;color:var(--accent);">● OK</div><div class="pmono" style="font-size:9px;color:var(--text3);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">mail.example.com</div></div>
         <div style="background:var(--bg3);border:.5px solid rgba(200,240,96,.2);border-radius:var(--r);padding:10px 11px;"><div class="prow" style="gap:5px;margin-bottom:3px;"><div style="width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0;"></div><div class="plbl">IMAP</div></div><div class="pmono" style="font-size:9px;color:var(--accent);">● OK</div><div class="pmono" style="font-size:9px;color:var(--text3);margin-top:1px;">Polling alle 5 Min</div></div>
       </div>
-      <div class="pcard" style="margin-bottom:9px;"><div class="plbl" style="margin-bottom:9px;">Pflichtformat — 5 Spalten</div><div style="font-family:var(--mono);font-size:10px;color:var(--text2);background:var(--bg3);padding:10px;border-radius:var(--r);line-height:2;"><span style="color:var(--accent);">2026-06-01</span> | <span style="color:var(--accent);">09:00</span> | <span style="color:var(--accent);">10:00</span> | <span style="color:var(--accent);">BR442</span> | <span style="color:var(--accent);">Planung Q3</span></div></div>
+      <div class="pcard" style="margin-bottom:9px;"><div class="plbl" style="margin-bottom:9px;">Pflichtformat — 5 Spalten</div><div style="font-family:var(--mono);font-size:10px;color:var(--text2);background:var(--bg3);padding:10px;border-radius:var(--r);line-height:2;"><span style="color:var(--accent);">2026-06-01</span> | <span style="color:var(--accent);">09:00</span> | <span style="color:var(--accent);">10:00</span> | <span style="color:var(--accent);">Support</span> | <span style="color:var(--accent);">Planung Q3</span></div></div>
       <div class="pcard"><div class="plbl" style="margin-bottom:9px;">Report senden</div><div class="pg2" style="margin-bottom:8px;"><div><div class="plbl" style="margin-bottom:3px;font-size:8px;">Tag</div><input class="pinput" type="date" value="2026-06-01" style="margin-bottom:0;"></div><div><div class="plbl" style="margin-bottom:3px;font-size:8px;">Empfänger</div><input class="pinput" type="email" placeholder="Standard" style="margin-bottom:0;"></div></div><button class="pbp">↑ Report senden</button></div>
     </div>
 
@@ -678,7 +678,7 @@ function openModal(type) {
         <div><div class="plbl" style="margin-bottom:3px;">Von</div><input class="pinput" type="time" value="14:00" style="margin-bottom:0;font-family:var(--mono);"></div>
         <div><div class="plbl" style="margin-bottom:3px;">Bis</div><input class="pinput" type="time" value="16:30" style="margin-bottom:0;font-family:var(--mono);"></div>
       </div>
-      <div><div class="plbl" style="margin-bottom:3px;">Projekt</div><select class="psel" style="margin-bottom:0;"><option>BR442</option><option>Entwicklung</option><option>Meeting</option></select></div>
+      <div><div class="plbl" style="margin-bottom:3px;">Projekt</div><select class="psel" style="margin-bottom:0;"><option>Support</option><option>Entwicklung</option><option>Meeting</option></select></div>
       <div><div class="plbl" style="margin-bottom:3px;">Beschreibung</div><input class="pinput" type="text" value="Roadmap Q3" style="margin-bottom:0;"></div>
       <div style="display:flex;gap:6px;margin-top:3px;">
         <button class="pbg" style="margin-bottom:0;flex:1;" onclick="closeModal()">Abbrechen</button>
@@ -692,7 +692,7 @@ function openModal(type) {
         <div><div class="plbl" style="margin-bottom:3px;">Von</div><input class="pinput" type="time" value="09:00" style="margin-bottom:0;font-family:var(--mono);"></div>
         <div><div class="plbl" style="margin-bottom:3px;">Bis</div><input class="pinput" type="time" value="10:30" style="margin-bottom:0;font-family:var(--mono);"></div>
       </div>
-      <div><div class="plbl" style="margin-bottom:3px;">Projekt</div><select class="psel" style="margin-bottom:0;"><option>Entwicklung</option><option>Meeting</option><option>BR442</option></select></div>
+      <div><div class="plbl" style="margin-bottom:3px;">Projekt</div><select class="psel" style="margin-bottom:0;"><option>Entwicklung</option><option>Meeting</option><option>Support</option></select></div>
       <div><div class="plbl" style="margin-bottom:3px;">Beschreibung</div><input class="pinput" type="text" placeholder="Pflichtfeld" style="margin-bottom:0;"></div>
       <div style="display:flex;gap:6px;margin-top:3px;">
         <button class="pbg" style="margin-bottom:0;flex:1;" onclick="closeModal()">Abbrechen</button>

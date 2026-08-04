@@ -621,7 +621,7 @@ def send_report(body: SendReportRequest, db: Session = Depends(get_db)):
 
 # Required format – one entry per line, always 5 pipe-separated columns:
 #   Datum      | Start | Ende  | Projekt     | Beschreibung
-#   2026-06-01 | 09:00 | 10:00 | BR442       | Planung Roadmap Q3
+#   2026-06-01 | 09:00 | 10:00 | Support     | Planung Roadmap Q3
 #   2026-06-01 | 09:00 | 10:00 | Entwicklung | Auth-System implementieren
 #
 # ALL 5 columns are mandatory. Column 4 is ALWAYS the project.
