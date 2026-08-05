@@ -36,6 +36,16 @@ export default function TimerPage({ activeTimer, setActiveTimer }) {
   useEffect(() => { loadToday() }, [loadToday])
   useEffect(() => { if (!activeTimer) loadToday() }, [activeTimer, loadToday])
 
+  useEffect(() => {
+    const interval = setInterval(loadToday, 15000)
+    const onVisible = () => { if (document.visibilityState === 'visible') loadToday() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [loadToday])
+
   const handleStart = async () => {
     setLoading(true); setError(null)
     try {

@@ -114,6 +114,8 @@ timetracker/
 | project           | String   | Freitext — Name des Projekts                  |
 | description       | String   | Optional (bei E-Mail-Import: Pflicht)         |
 | source            | Integer  | 0=Timer, 1=Manuell, 2=E-Mail                 |
+| paused_at         | DateTime | UTC, nullable (= Zeitpunkt der aktuellen Pause) |
+| paused_seconds    | Float    | Kumulierte Pausenzeit in Sekunden (abgezogen bei duration_minutes) |
 
 ### `day_notes`
 | Spalte     | Typ      | Beschreibung                    |
@@ -168,6 +170,8 @@ timetracker/
 | Method | Path               | Beschreibung                         |
 |--------|--------------------|--------------------------------------|
 | POST   | /api/timer/start   | Body: `{ project, description? }`    |
+| POST   | /api/timer/pause   | Aktiven Timer pausieren               |
+| POST   | /api/timer/resume  | Pausierten Timer fortsetzen           |
 | POST   | /api/timer/stop    | Aktiven Timer stoppen                |
 | GET    | /api/timer/active  | Aktiven Timer abrufen (oder null)    |
 
@@ -281,13 +285,15 @@ Alle Variablen optional — fehlen Credentials, ist Mail deaktiviert.
 
 | Route      | Inhalt                                      | Quelle |
 |------------|----------------------------------------------|--------|
-| `/`        | Laufzeit des aktiven Timers, z.B. `00:12:34`  | `<RunningBadge startTime={activeTimer.start_time} />` |
+| `/`        | Laufzeit des aktiven Timers, z.B. `00:12:34` (`⏸` Präfix bei Pause) | `<RunningBadge activeTimer={activeTimer} />` |
 | `/woche`   | Aktuelle ISO-Kalenderwoche                    | `KW ${dayjs().isoWeek()}` |
 | `/verlauf` | Gewähltes Projekt im Verlauf-Filter, Default `Alle Projekte` | `historyProject` State |
 | `/stats`   | Gewählter Monat/Jahr                          | `statsMonth`/`statsYear` State |
 | `/mail`    | IMAP-Konfigurationsstatus (Punkt + Label)     | `imapConfigured` |
 
 **`RunningBadge`** ist bewusst eine eigene Komponente (nicht `useTimer` direkt in `App`): der Hook tickt per `requestAnimationFrame`, ein State-Update auf `App`-Ebene würde bei jedem Frame die komplette Seite (Routes + Sidebar) neu rendern. Als eigene Komponente rendert nur sie selbst bei jedem Tick.
+
+**Pause/Resume:** `useTimer(startTime, pausedAt, pausedSeconds)` friert `elapsed` ein, solange `pausedAt` gesetzt ist (kein `requestAnimationFrame`-Tick), und zieht `pausedSeconds` von der Laufzeit ab. Der Live-Punkt (`.sidebar-live-dot`, Bottom-Nav-Dot) wechselt bei Pause von `--accent` auf `--amber`, damit der Zustand auch ohne Blick auf die Timer-Seite erkennbar ist.
 
 `badges` wird nur in der Desktop-`Sidebar` verwendet; `mobileBadges` (Bottom-Nav) ist eine separate, bewusst schlankere Variante ohne Timer- und Verlauf-Eintrag (wenig Platz auf Mobile).
 
@@ -409,6 +415,13 @@ const { names, projects, loading }   = useProjectNames()
 invalidateProjects()  // nach jeder Mutation aufrufen
 ```
 
+### Cross-Device-Sync (Polling)
+`App.jsx` pollt `/api/timer/active` alle 10s (zusätzlich sofort bei `visibilitychange`/`focus`) und hält `activeTimer` aktuell — so übernimmt z.B. der Desktop-Tab automatisch den Timer-Status (läuft/pausiert/gestoppt), wenn er am Handy geändert wurde, ohne Reload.
+
+`TimerPage.jsx` pollt zusätzlich `loadToday()` (Tageseinträge, Notiz, Summe) alle 15s + sofort bei `visibilitychange`, damit auch Änderungen von anderen Geräten (manuelle Einträge, Notiz) sichtbar werden, selbst wenn sich `activeTimer` dabei nicht ändert.
+
+Beide Intervalle sind bewusst kurz für zügigen Sync, aber unkritisch für Backend-Last bei Einzel-User-Betrieb. Kein WebSocket/SSE — reines Polling.
+
 ### Nginx
 - `/api/` → `proxy_pass http://backend:8000/api/`
 - JS/CSS/Fonts → 1 Jahr Cache
@@ -478,5 +491,6 @@ cd frontend && npm install && npm run dev
 | v3.4    | Desktop-Sidebar (≥860px) statt Bottom-Nav, Live-Badges (KW / gewählter Monat / IMAP-Status), Versionsanzeige in Sidebar |
 | v3.5    | Verlauf: Filter nach Projekt und Aufgabe. Stats: Projekt-Filter im Balkendiagramm (anklickbar), monatliche Überstunden-Karte mit Pro-Tag/Pro-Projekt-Umschalter |
 | v3.6    | Sidebar Live-Badges: laufende Timer-Zeit bei "Timer", ausgewähltes Projekt bei "Verlauf" (Default "Alle Projekte") |
+| v3.7    | Cross-Device-Sync per Polling: `activeTimer` alle 10s + bei Tab-Fokus, Tagesdaten alle 15s + bei Tab-Fokus — Timer-Start/Stop/Pause auf einem Gerät erscheint automatisch auf anderen, ohne Reload |
 
-**Aktuelle Version: v3.6**
+**Aktuelle Version: v3.7**

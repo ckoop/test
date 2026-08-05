@@ -14,7 +14,7 @@ import { useTimer, fmtDuration } from './hooks/useTimer'
 
 dayjs.extend(isoWeek)
 
-export const APP_VERSION = 'v3.6'
+export const APP_VERSION = 'v3.7'
 
 const NAV = [
   { to: '/',        label: 'Timer',   Icon: IcoTimer   },
@@ -32,7 +32,20 @@ export default function App() {
   const [statsMonth, setStatsMonth] = useState(dayjs().month() + 1)
   const [historyProject, setHistoryProject] = useState('')
   const [imapConfigured, setImapConfigured] = useState(null)
-  useEffect(() => { api.getActive().then(setActiveTimer).catch(() => {}) }, [])
+  useEffect(() => {
+    const refreshActiveTimer = () => api.getActive().then(setActiveTimer).catch(() => {})
+    refreshActiveTimer()
+    const interval = setInterval(refreshActiveTimer, 10000)
+    const onVisible = () => { if (document.visibilityState === 'visible') refreshActiveTimer() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', refreshActiveTimer)
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', refreshActiveTimer)
+    }
+  }, [])
+
   useEffect(() => { api.getMailConfig().then(c => setImapConfigured(!!c?.imap?.configured)).catch(() => {}) }, [])
 
   const mailBadge = imapConfigured === null ? null : (
