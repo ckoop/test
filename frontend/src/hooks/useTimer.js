@@ -1,16 +1,22 @@
 import { useState, useEffect, useRef } from 'react'
 
-export function useTimer(startTime) {
+function toMs(t) { return new Date(t.endsWith('Z') ? t : t + 'Z').getTime() }
+
+export function useTimer(startTime, pausedAt, pausedSeconds = 0) {
   const [elapsed, setElapsed] = useState(0)
   const raf = useRef(null)
   useEffect(() => {
     if (!startTime) { setElapsed(0); return }
-    const t = startTime.endsWith('Z') ? startTime : startTime + 'Z'
-    const origin = new Date(t).getTime()
-    const tick = () => { setElapsed(Date.now() - origin); raf.current = requestAnimationFrame(tick) }
+    const origin = toMs(startTime)
+    const pausedMs = (pausedSeconds || 0) * 1000
+    if (pausedAt) {
+      setElapsed(toMs(pausedAt) - origin - pausedMs)
+      return
+    }
+    const tick = () => { setElapsed(Date.now() - origin - pausedMs); raf.current = requestAnimationFrame(tick) }
     raf.current = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(raf.current)
-  }, [startTime])
+  }, [startTime, pausedAt, pausedSeconds])
   return elapsed
 }
 

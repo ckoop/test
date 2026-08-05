@@ -33,6 +33,8 @@ class TimeEntry(Base):
     description      = Column(String(500), nullable=True)
     # source: 0=timer, 1=manual, 2=email
     source           = Column(Integer, nullable=False, default=0)
+    paused_at        = Column(DateTime, nullable=True)
+    paused_seconds   = Column(Float, nullable=False, default=0)
 
 class DayNote(Base):
     __tablename__ = "day_notes"
@@ -63,6 +65,20 @@ class Project(Base):
 
 
 Base.metadata.create_all(bind=engine)
+
+
+def _migrate_columns():
+    if engine.dialect.name != "sqlite":
+        return
+    with engine.connect() as conn:
+        cols = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(time_entries)")}
+        if "paused_at" not in cols:
+            conn.exec_driver_sql("ALTER TABLE time_entries ADD COLUMN paused_at DATETIME")
+        if "paused_seconds" not in cols:
+            conn.exec_driver_sql("ALTER TABLE time_entries ADD COLUMN paused_seconds FLOAT NOT NULL DEFAULT 0")
+        conn.commit()
+
+_migrate_columns()
 
 
 # ── Seed default projects ─────────────────────────────────────────────────────
@@ -115,6 +131,8 @@ class TimeEntryOut(BaseModel):
     project: Optional[str]
     description: Optional[str]
     source: int   # 0=timer 1=manual 2=email
+    paused_at: Optional[datetime]
+    paused_seconds: float
     model_config = {"from_attributes": True}
 
 class DayNoteUpsert(BaseModel):
@@ -243,14 +261,40 @@ def start_timer(body: TimeEntryCreate, db: Session = Depends(get_db)):
     db.add(e); db.commit(); db.refresh(e)
     return e
 
+@app.post("/api/timer/pause", response_model=TimeEntryOut)
+def pause_timer(db: Session = Depends(get_db)):
+    active = db.query(TimeEntry).filter(TimeEntry.end_time == None).first()
+    if not active:
+        raise HTTPException(404, "Kein aktiver Timer")
+    if active.paused_at is not None:
+        raise HTTPException(400, "Timer ist bereits pausiert")
+    active.paused_at = datetime.utcnow()
+    db.commit(); db.refresh(active)
+    return active
+
+@app.post("/api/timer/resume", response_model=TimeEntryOut)
+def resume_timer(db: Session = Depends(get_db)):
+    active = db.query(TimeEntry).filter(TimeEntry.end_time == None).first()
+    if not active:
+        raise HTTPException(404, "Kein aktiver Timer")
+    if active.paused_at is None:
+        raise HTTPException(400, "Timer ist nicht pausiert")
+    active.paused_seconds += (datetime.utcnow() - active.paused_at).total_seconds()
+    active.paused_at = None
+    db.commit(); db.refresh(active)
+    return active
+
 @app.post("/api/timer/stop", response_model=TimeEntryOut)
 def stop_timer(db: Session = Depends(get_db)):
     active = db.query(TimeEntry).filter(TimeEntry.end_time == None).first()
     if not active:
         raise HTTPException(404, "Kein aktiver Timer")
     now = datetime.utcnow()
+    if active.paused_at is not None:
+        active.paused_seconds += (now - active.paused_at).total_seconds()
+        active.paused_at = None
     active.end_time = now
-    active.duration_minutes = (now - active.start_time).total_seconds() / 60
+    active.duration_minutes = (now - active.start_time).total_seconds() / 60 - active.paused_seconds / 60
     db.commit(); db.refresh(active)
     return active
 

@@ -22,7 +22,8 @@ export default function TimerPage({ activeTimer, setActiveTimer }) {
   const [showEdit, setShowEdit]     = useState(null)   // entry to edit
 
   const { names: projectNames } = useProjectNames()
-  const elapsed = useTimer(activeTimer?.start_time)
+  const elapsed = useTimer(activeTimer?.start_time, activeTimer?.paused_at, activeTimer?.paused_seconds)
+  const isPaused = !!activeTimer?.paused_at
   const today   = dayjs().format('YYYY-MM-DD')
 
   const loadToday = useCallback(() => {
@@ -47,6 +48,20 @@ export default function TimerPage({ activeTimer, setActiveTimer }) {
   const handleStop = async () => {
     setLoading(true); setError(null)
     try { await api.stopTimer(); setActiveTimer(null); loadToday() }
+    catch (e) { setError(e.message) }
+    finally { setLoading(false) }
+  }
+
+  const handlePause = async () => {
+    setLoading(true); setError(null)
+    try { const e = await api.pauseTimer(); setActiveTimer(e) }
+    catch (e) { setError(e.message) }
+    finally { setLoading(false) }
+  }
+
+  const handleResume = async () => {
+    setLoading(true); setError(null)
+    try { const e = await api.resumeTimer(); setActiveTimer(e) }
     catch (e) { setError(e.message) }
     finally { setLoading(false) }
   }
@@ -85,7 +100,7 @@ export default function TimerPage({ activeTimer, setActiveTimer }) {
       {/* Timer card */}
       <div className="card" style={{ marginBottom: 12, borderColor: activeTimer ? 'rgba(200,240,96,.25)' : 'var(--border)' }}>
         {activeTimer ? (
-          <RunningTimer activeTimer={activeTimer} elapsed={elapsed} onStop={handleStop} loading={loading} />
+          <RunningTimer activeTimer={activeTimer} elapsed={elapsed} isPaused={isPaused} onStop={handleStop} onPause={handlePause} onResume={handleResume} loading={loading} />
         ) : (
           <StartTimer project={project} setProject={setProject} description={description} setDescription={setDescription} onStart={handleStart} loading={loading} projectNames={projectNames} />
         )}
@@ -142,22 +157,30 @@ export default function TimerPage({ activeTimer, setActiveTimer }) {
   )
 }
 
-function RunningTimer({ activeTimer, elapsed, onStop, loading }) {
+function RunningTimer({ activeTimer, elapsed, isPaused, onStop, onPause, onResume, loading }) {
+  const color = isPaused ? 'var(--amber)' : 'var(--accent)'
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-        <span className="pulse" />
-        <span className="mono" style={{ fontSize: 10, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '.1em' }}>Läuft</span>
+        {isPaused ? <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--amber)', flexShrink: 0 }} /> : <span className="pulse" />}
+        <span className="mono" style={{ fontSize: 10, color, textTransform: 'uppercase', letterSpacing: '.1em' }}>{isPaused ? 'Pausiert' : 'Läuft'}</span>
         <span style={{ marginLeft: 'auto' }} className="tag tag-g">{activeTimer.project}</span>
       </div>
-      <div className="mono" style={{ fontSize: 50, fontWeight: 300, color: 'var(--accent)', letterSpacing: '-.02em', lineHeight: 1, marginBottom: 6 }}>
+      <div className="mono" style={{ fontSize: 50, fontWeight: 300, color, letterSpacing: '-.02em', lineHeight: 1, marginBottom: 6 }}>
         {fmtDuration(elapsed)}
       </div>
       {activeTimer.description && <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 6 }}>{activeTimer.description}</div>}
       <div className="mono" style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 18 }}>
         Gestartet: {fmtTime(activeTimer.start_time)} Uhr
       </div>
-      <button className="btn btn-danger" onClick={onStop} disabled={loading}>■ Timer stoppen</button>
+      <div style={{ display: 'flex', gap: 8 }}>
+        {isPaused ? (
+          <button className="btn btn-primary" style={{ flex: 1 }} onClick={onResume} disabled={loading}>▶ Fortsetzen</button>
+        ) : (
+          <button className="btn btn-ghost" style={{ flex: 1, justifyContent: 'center' }} onClick={onPause} disabled={loading}>⏸ Pausieren</button>
+        )}
+        <button className="btn btn-danger" style={{ flex: 1 }} onClick={onStop} disabled={loading}>■ Stoppen</button>
+      </div>
     </div>
   )
 }
