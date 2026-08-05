@@ -37,7 +37,7 @@ export default function TimerPage({ activeTimer, setActiveTimer }) {
   useEffect(() => { if (!activeTimer) loadToday() }, [activeTimer, loadToday])
 
   useEffect(() => {
-    const interval = setInterval(loadToday, 15000)
+    const interval = setInterval(loadToday, 5000)
     const onVisible = () => { if (document.visibilityState === 'visible') loadToday() }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
