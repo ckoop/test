@@ -14,7 +14,7 @@ import { useTimer, fmtDuration } from './hooks/useTimer'
 
 dayjs.extend(isoWeek)
 
-export const APP_VERSION = 'v3.7'
+export const APP_VERSION = 'v3.8'
 
 const NAV = [
   { to: '/',        label: 'Timer',   Icon: IcoTimer   },
@@ -35,7 +35,7 @@ export default function App() {
   useEffect(() => {
     const refreshActiveTimer = () => api.getActive().then(setActiveTimer).catch(() => {})
     refreshActiveTimer()
-    const interval = setInterval(refreshActiveTimer, 10000)
+    const interval = setInterval(refreshActiveTimer, 5000)
     const onVisible = () => { if (document.visibilityState === 'visible') refreshActiveTimer() }
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', refreshActiveTimer)

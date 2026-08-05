@@ -416,9 +416,11 @@ invalidateProjects()  // nach jeder Mutation aufrufen
 ```
 
 ### Cross-Device-Sync (Polling)
-`App.jsx` pollt `/api/timer/active` alle 10s (zusätzlich sofort bei `visibilitychange`/`focus`) und hält `activeTimer` aktuell — so übernimmt z.B. der Desktop-Tab automatisch den Timer-Status (läuft/pausiert/gestoppt), wenn er am Handy geändert wurde, ohne Reload.
+`App.jsx` pollt `/api/timer/active` alle 5s (zusätzlich sofort bei `visibilitychange`/`focus`) und hält `activeTimer` aktuell — so übernimmt z.B. der Desktop-Tab automatisch den Timer-Status (läuft/pausiert/gestoppt), wenn er am Handy geändert wurde, ohne Reload.
 
-`TimerPage.jsx` pollt zusätzlich `loadToday()` (Tageseinträge, Notiz, Summe) alle 15s + sofort bei `visibilitychange`, damit auch Änderungen von anderen Geräten (manuelle Einträge, Notiz) sichtbar werden, selbst wenn sich `activeTimer` dabei nicht ändert.
+`TimerPage.jsx` pollt zusätzlich `loadToday()` (Tageseinträge, Notiz, Summe) alle 5s + sofort bei `visibilitychange`, damit auch Änderungen von anderen Geräten (manuelle Einträge, Notiz) sichtbar werden, selbst wenn sich `activeTimer` dabei nicht ändert.
+
+**Wichtig:** Als SPA lädt ein bereits offener Tab neuen Frontend-Code nicht von selbst nach — nach jedem Rebuild/Deploy braucht ein offener Tab (Handy wie Desktop) einmal ein manuelles Neuladen, um die neue JS-Version zu bekommen.
 
 Beide Intervalle sind bewusst kurz für zügigen Sync, aber unkritisch für Backend-Last bei Einzel-User-Betrieb. Kein WebSocket/SSE — reines Polling.
 
@@ -492,5 +494,6 @@ cd frontend && npm install && npm run dev
 | v3.5    | Verlauf: Filter nach Projekt und Aufgabe. Stats: Projekt-Filter im Balkendiagramm (anklickbar), monatliche Überstunden-Karte mit Pro-Tag/Pro-Projekt-Umschalter |
 | v3.6    | Sidebar Live-Badges: laufende Timer-Zeit bei "Timer", ausgewähltes Projekt bei "Verlauf" (Default "Alle Projekte") |
 | v3.7    | Cross-Device-Sync per Polling: `activeTimer` alle 10s + bei Tab-Fokus, Tagesdaten alle 15s + bei Tab-Fokus — Timer-Start/Stop/Pause auf einem Gerät erscheint automatisch auf anderen, ohne Reload |
+| v3.8    | Sync-Intervalle von 10s/15s auf einheitlich 5s verkürzt (weniger Zeitversatz zwischen Geräten) |
 
-**Aktuelle Version: v3.7**
+**Aktuelle Version: v3.8**
