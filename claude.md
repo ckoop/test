@@ -295,7 +295,7 @@ Alle Variablen optional — fehlen Credentials, ist Mail deaktiviert.
 
 **Pause/Resume:** `useTimer(startTime, pausedAt, pausedSeconds)` friert `elapsed` ein, solange `pausedAt` gesetzt ist (kein `requestAnimationFrame`-Tick), und zieht `pausedSeconds` von der Laufzeit ab. Der Live-Punkt (`.sidebar-live-dot`, Bottom-Nav-Dot) wechselt bei Pause von `--accent` auf `--amber`, damit der Zustand auch ohne Blick auf die Timer-Seite erkennbar ist.
 
-`badges` wird nur in der Desktop-`Sidebar` verwendet; `mobileBadges` (Bottom-Nav) ist eine separate, bewusst schlankere Variante ohne Timer- und Verlauf-Eintrag (wenig Platz auf Mobile).
+`badges` wird nur in der Desktop-`Sidebar` verwendet; `mobileBadges` (Bottom-Nav) ist eine separate, bewusst schlankere Variante ohne Timer-Badge (Live-Dot reicht dort, wenig Platz auf Mobile) — der Verlauf-Badge (gewähltes Projekt) wird seit v3.9 auch dort angezeigt.
 
 `.sidebar-badge` hat `max-width: 90px` + `text-overflow: ellipsis`, damit lange Projektnamen (z.B. `Dokumentation`) nicht überlaufen.
 
@@ -495,5 +495,6 @@ cd frontend && npm install && npm run dev
 | v3.6    | Sidebar Live-Badges: laufende Timer-Zeit bei "Timer", ausgewähltes Projekt bei "Verlauf" (Default "Alle Projekte") |
 | v3.7    | Cross-Device-Sync per Polling: `activeTimer` alle 10s + bei Tab-Fokus, Tagesdaten alle 15s + bei Tab-Fokus — Timer-Start/Stop/Pause auf einem Gerät erscheint automatisch auf anderen, ohne Reload |
 | v3.8    | Sync-Intervalle von 10s/15s auf einheitlich 5s verkürzt (weniger Zeitversatz zwischen Geräten) |
+| v3.9    | Verlauf-Badge (gewähltes Projekt) auch in der mobilen Bottom-Nav sichtbar, nicht mehr nur in der Desktop-Sidebar |
 
-**Aktuelle Version: v3.8**
+**Aktuelle Version: v3.9**
