@@ -14,7 +14,7 @@ import { useTimer, fmtDuration } from './hooks/useTimer'
 
 dayjs.extend(isoWeek)
 
-export const APP_VERSION = 'v3.8'
+export const APP_VERSION = 'v3.9'
 
 const NAV = [
   { to: '/',        label: 'Timer',   Icon: IcoTimer   },
@@ -62,9 +62,10 @@ export default function App() {
     '/stats': `${MONTHS[statsMonth - 1]} ${statsYear}`,
     '/mail': mailBadge,
   }
-  // Compact variants for the bottom nav (mobile) — narrower items, no year
+  // Compact variants for the bottom nav (mobile) — narrower items, no year, no Timer-Badge (Live-Dot reicht)
   const mobileBadges = {
     '/woche': badges['/woche'],
+    '/verlauf': badges['/verlauf'],
     '/stats': MONTHS[statsMonth - 1],
     '/mail': mailBadge,
   }
