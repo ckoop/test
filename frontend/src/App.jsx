@@ -43,7 +43,7 @@ export default function App() {
   )
 
   const badges = {
-    '/': activeTimer ? <RunningBadge startTime={activeTimer.start_time} /> : null,
+    '/': activeTimer ? <RunningBadge activeTimer={activeTimer} /> : null,
     '/woche': `KW ${dayjs().isoWeek()}`,
     '/verlauf': historyProject || 'Alle Projekte',
     '/stats': `${MONTHS[statsMonth - 1]} ${statsYear}`,
@@ -56,9 +56,11 @@ export default function App() {
     '/mail': mailBadge,
   }
 
+  const isPaused = !!activeTimer?.paused_at
+
   return (
     <div className="app-shell">
-      <Sidebar hasActive={!!activeTimer} badges={badges} />
+      <Sidebar hasActive={!!activeTimer} isPaused={isPaused} badges={badges} />
       <div className="main-area">
         <Routes>
           <Route path="/"        element={<TimerPage   activeTimer={activeTimer} setActiveTimer={setActiveTimer} />} />
@@ -70,17 +72,17 @@ export default function App() {
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </div>
-      <BottomNav hasActive={!!activeTimer} badges={mobileBadges} />
+      <BottomNav hasActive={!!activeTimer} isPaused={isPaused} badges={mobileBadges} />
     </div>
   )
 }
 
-function RunningBadge({ startTime }) {
-  const elapsed = useTimer(startTime)
-  return <>{fmtDuration(elapsed)}</>
+function RunningBadge({ activeTimer }) {
+  const elapsed = useTimer(activeTimer.start_time, activeTimer.paused_at, activeTimer.paused_seconds)
+  return <>{activeTimer.paused_at && '⏸ '}{fmtDuration(elapsed)}</>
 }
 
-function Sidebar({ hasActive, badges }) {
+function Sidebar({ hasActive, isPaused, badges }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">Epoch</div>
@@ -92,7 +94,7 @@ function Sidebar({ hasActive, badges }) {
               <>
                 <span className="sidebar-icon-wrap">
                   <Icon active={isActive} />
-                  {to === '/' && hasActive && <span className="sidebar-live-dot" />}
+                  {to === '/' && hasActive && <span className={'sidebar-live-dot' + (isPaused ? ' paused' : '')} />}
                 </span>
                 {label}
                 {badges[to] && <span className="sidebar-badge">{badges[to]}</span>}
@@ -105,7 +107,7 @@ function Sidebar({ hasActive, badges }) {
   )
 }
 
-function BottomNav({ hasActive, badges }) {
+function BottomNav({ hasActive, isPaused, badges }) {
   return (
     <nav className="bottom-nav" style={{
       position: 'fixed', bottom: 0, left: 0, right: 0,
@@ -131,7 +133,7 @@ function BottomNav({ hasActive, badges }) {
               <span style={{ position: 'relative' }}>
                 <Icon active={isActive} />
                 {to === '/' && hasActive && (
-                  <span style={{ position: 'absolute', top: -1, right: -3, width: 5, height: 5, borderRadius: '50%', background: 'var(--accent)' }} />
+                  <span style={{ position: 'absolute', top: -1, right: -3, width: 5, height: 5, borderRadius: '50%', background: isPaused ? 'var(--amber)' : 'var(--accent)' }} />
                 )}
               </span>
               {label}
