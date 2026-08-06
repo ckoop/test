@@ -671,7 +671,6 @@ def export_json(from_date: Optional[date]=None, to_date: Optional[date]=None, db
                              media_type="application/json",
                              headers={"Content-Disposition": f'attachment; filename="{fn}"'})
 
-
 # ── Projects ─────────────────────────────────────────────────────────────────────
 
 @app.get("/api/projects", response_model=List[ProjectOut])

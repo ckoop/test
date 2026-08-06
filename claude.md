@@ -95,7 +95,7 @@ timetracker/
             ├── HistoryPage.jsx      # Verlauf mit Datums-, Projekt- und Aufgaben-Filter
             ├── StatsPage.jsx        # Monatsstatistiken + Recharts, Projekt-Filter im Balkendiagramm, Überstunden Pro Tag/Pro Projekt
             ├── MailPage.jsx         # Mail-Status + Report senden + IMAP Poll + Log
-            ├── ExportPage.jsx       # CSV / JSON Export
+            ├── ExportPage.jsx       # CSV / JSON Export + Tageszusammenfassung (Text, Vorschau + .txt-Download)
             ├── SettingsPage.jsx     # Projektverwaltung (neu/umbenennen/Farbe/archiv) + Pomodoro-Einstellungen
             ├── OvertimeBanner.jsx   # Überstunden-Anzeige (compact + full)
             └── ManualEntryModal.jsx # Shared Modal für manuelle Einträge
@@ -237,8 +237,8 @@ timetracker/
 ### Export
 | Method | Path             | Query                  | Rückgabe        |
 |--------|------------------|------------------------|-----------------|
-| GET    | /api/export/csv  | `from_date`, `to_date` | CSV (UTF-8 BOM) |
-| GET    | /api/export/json | `from_date`, `to_date` | JSON            |
+| GET    | /api/export/csv     | `from_date`, `to_date` | CSV (UTF-8 BOM) |
+| GET    | /api/export/json    | `from_date`, `to_date` | JSON            |
 
 ### Mail
 | Method | Path                  | Beschreibung                          |
@@ -406,6 +406,22 @@ Beispiel (Juli 2026): 11 Tage mit Tages-Überstunden, aber nur `AK6` hatte an 2 
 
 ---
 
+## Export: Tageszusammenfassung im Detail
+
+Läuft komplett **client-seitig** in `ExportPage.jsx`, kein eigener Backend-Endpoint (es gab kurzzeitig einen serverseitig aggregierenden `/api/export/summary`, der wurde wieder entfernt — die gewünschte Struktur braucht keine Summierung mehr, siehe unten). Datengrundlage ist das ohnehin vorhandene `GET /api/entries` (gefiltert auf `end_time` gesetzt, also nur abgeschlossene Einträge).
+
+**Gruppierung: `(Datum, Projekt, Tätigkeit)`.** Nur exakt identische Tätigkeitsbeschreibungen innerhalb desselben Tags und Projekts werden zusammengefasst (Dauer summiert) — unterschiedliche Beschreibungen bleiben immer eigene Einträge, auch wenn sie inhaltlich ähnlich klingen. Verschachtelte `Map`s (Datum → Projekt → Tätigkeit → Minuten) sorgen dafür, dass eine zusammengefasste Tätigkeit an der Stelle ihres **ersten** Auftretens stehen bleibt (erneutes `.set()` auf einen bestehenden Key verschiebt ihn nicht in der Iterationsreihenfolge) — z. B. viermal „ETCS-Schulung" am selben Tag im selben Projekt wird zu einer Zeile `ETCS-Schulung (4h)`.
+
+**Reihenfolge chronologisch:** `formatProjectDaySummary()` sortiert alle Einträge zuerst global nach `start_time` (String-Vergleich reicht, da ISO-Format), gruppiert dann in verschachtelten `Map`s nach Datum → Projekt. Da `Map` die Einfügereihenfolge beibehält, ergibt sich automatisch: Tage aufsteigend, Projekte innerhalb eines Tages in der Reihenfolge ihres ersten Auftretens, Tätigkeiten innerhalb eines Projekts chronologisch.
+
+**Format:** eine Zeile pro `(Datum, Projekt)`-Kombination: `{Projekt} – {Tätigkeit1} ({h1}), {Tätigkeit2} ({h2}), ...`, darüber ein Datums-Header (`dddd, D. MMMM YYYY`). Fehlt die Tätigkeit bei einem Slot, wird `Sonstiges` als Platzhalter verwendet.
+
+**Einheit ausschließlich Stunden:** `fmtHours(minutes)` = `Math.round((minutes/60)*100)/100` + `"h"` — 2 Nachkommastellen, JS-Zahl-zu-String entfernt überflüssige Nullen automatisch (`1` statt `1.00`, `0.5` statt `0.50`). Bewusst **kein** Minuten-Anteil mehr wie beim alten `fmtMinutes()` (`1h 23min`) — abweichend vom sonst in der App üblichen Format, hier explizit so gewünscht.
+
+Vorschau (`<pre>`, kopierbar über `navigator.clipboard`) und `.txt`-Download (client-seitig per `Blob`) nutzen beide dieselbe formatierte Zeichenkette. Ein `useEffect` setzt die Vorschau bei Änderung von `from`/`to` zurück.
+
+---
+
 ## Mail-Feature im Detail
 
 ### Ausgehend (SMTP)
@@ -554,5 +570,6 @@ cd frontend && npm install && npm run dev
 | v3.9    | Verlauf-Badge (gewähltes Projekt) auch in der mobilen Bottom-Nav sichtbar, nicht mehr nur in der Desktop-Sidebar |
 | v4.0    | Pomodoro-Timer: treibt den echten Zeiterfassungs-Timer (auto Pause/Resume via `paused_at`/`paused_seconds`), konfigurierbar in den Settings (Dauern, Zyklen, Auto-Start, Ton, Notifications), serverseitiger Hintergrund-Tick für Phasenwechsel, `PomodoroCard` auf der Timer-Seite |
 | v4.1    | Pomodoro: Master-Schalter zum kompletten Deaktivieren (Frontend + Backend-Guard), Navigation zu anderen Menüpunkten während aktiver Session gesperrt (`usePomodoro()` dafür nach `App.jsx` gehoben), SVG-Favicon im Epoch-Uhr-Design |
+| v4.2    | Export: Tageszusammenfassung als Text — pro Tag und Projekt, Tätigkeiten chronologisch und unaggregiert mit Dauer in Stunden (z.B. „AK6 – Daily Stadler (0.5h), Abstimmung intern (1h)"), Vorschau (kopierbar) + .txt-Download auf der Export-Seite |
 
-**Aktuelle Version: v4.1**
+**Aktuelle Version: v4.2**
