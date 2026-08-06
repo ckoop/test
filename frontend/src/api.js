@@ -50,4 +50,13 @@ export const api = {
   getMailLog:    (limit = 50) => req(`/mail/log?limit=${limit}`),
   getMailConfig: () => req('/mail/config'),
   triggerPoll:   () => req('/mail/poll', { method: 'POST' }),
+
+  // Pomodoro
+  getPomodoroSettings:    () => req('/pomodoro/settings'),
+  updatePomodoroSettings: (data) => req('/pomodoro/settings', { method: 'PUT', body: JSON.stringify(data) }),
+  getPomodoroActive:      () => req('/pomodoro/active'),
+  startPomodoro:          (data) => req('/pomodoro/start', { method: 'POST', body: JSON.stringify(data) }),
+  skipPomodoro:           () => req('/pomodoro/skip', { method: 'POST' }),
+  continuePomodoro:       () => req('/pomodoro/continue', { method: 'POST' }),
+  stopPomodoro:           () => req('/pomodoro/stop', { method: 'POST' }),
 }
