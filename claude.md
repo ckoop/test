@@ -78,7 +78,8 @@ timetracker/
     ├── vite.config.js
     ├── index.html                   # PWA meta tags
     ├── public/
-    │   └── manifest.json
+    │   ├── manifest.json
+    │   └── favicon.svg               # Uhr-Icon (Accent-Grün auf dunklem Grund), gleiche Formsprache wie IcoTimer
     └── src/
         ├── main.jsx
         ├── App.jsx                  # Routing + BottomNav (7 Tabs)
@@ -86,15 +87,16 @@ timetracker/
         ├── index.css                # Design Tokens + globale Styles
         ├── hooks/
         │   ├── useTimer.js          # Live-Timer Hook + Format-Helpers + Overtime
-        │   └── useProjects.js       # Shared project list mit Cache + invalidation
+        │   ├── useProjects.js       # Shared project list mit Cache + invalidation
+        │   └── usePomodoro.js       # Pomodoro-Polling + Countdown + Sound/Notification
         └── pages/
-            ├── TimerPage.jsx        # Timer + manuelle Einträge + Tagesnotiz + Report
+            ├── TimerPage.jsx        # Timer + Pomodoro-Card + manuelle Einträge + Tagesnotiz + Report
             ├── WeekPage.jsx         # Wochenübersicht + Balkendiagramm
             ├── HistoryPage.jsx      # Verlauf mit Datums-, Projekt- und Aufgaben-Filter
             ├── StatsPage.jsx        # Monatsstatistiken + Recharts, Projekt-Filter im Balkendiagramm, Überstunden Pro Tag/Pro Projekt
             ├── MailPage.jsx         # Mail-Status + Report senden + IMAP Poll + Log
             ├── ExportPage.jsx       # CSV / JSON Export
-            ├── SettingsPage.jsx     # Projektverwaltung (neu/umbenennen/Farbe/archiv)
+            ├── SettingsPage.jsx     # Projektverwaltung (neu/umbenennen/Farbe/archiv) + Pomodoro-Einstellungen
             ├── OvertimeBanner.jsx   # Überstunden-Anzeige (compact + full)
             └── ManualEntryModal.jsx # Shared Modal für manuelle Einträge
 ```
@@ -146,6 +148,27 @@ timetracker/
 | Planung       | `#ffaa00` |
 | Support       | `#ff4444` |
 | Dokumentation | `#44bbff` |
+
+### `pomodoro_settings` (Singleton, id=1)
+| Spalte                    | Typ     | Beschreibung                          |
+|---------------------------|---------|----------------------------------------|
+| enabled                   | Integer | 1=Pomodoro-Feature aktiv (Master-Schalter, Default 1) |
+| work_minutes              | Integer | Arbeitsdauer, Default 25               |
+| short_break_minutes       | Integer | Kurze Pause, Default 5                 |
+| long_break_minutes        | Integer | Lange Pause, Default 15                |
+| cycles_before_long_break  | Integer | Pomodoros bis lange Pause, Default 4   |
+| auto_start_next           | Integer | 1=nächste Phase startet automatisch    |
+| sound_enabled              | Integer | 1=Ton bei Phasenwechsel                |
+| notifications_enabled      | Integer | 1=Browser-Notification bei Phasenwechsel |
+
+### `pomodoro_state` (Singleton, id=1)
+| Spalte                | Typ      | Beschreibung                                              |
+|------------------------|----------|-------------------------------------------------------------|
+| phase                  | String   | `null` \| `work` \| `short_break` \| `long_break`          |
+| phase_start            | DateTime | UTC, `null` solange `awaiting_confirmation`                |
+| cycles_completed       | Integer  | Abgeschlossene Arbeits-Intervalle (resettet nur bei Stop)   |
+| awaiting_confirmation  | Integer  | 1=wartet auf `/continue` (wenn `auto_start_next` aus ist)   |
+| project / description  | String   | Kopie der Werte aus `/pomodoro/start`                       |
 
 ### `mail_log`
 | Spalte     | Typ      | Beschreibung                                        |
@@ -224,6 +247,17 @@ timetracker/
 | GET    | /api/mail/log         | Query: `limit` (default 50)           |
 | GET    | /api/mail/config      | Sanitisierte Konfig (ohne Passwörter) |
 | POST   | /api/mail/poll        | Manuellen IMAP-Poll triggern          |
+
+### Pomodoro
+| Method | Path                    | Beschreibung                                                          |
+|--------|-------------------------|-------------------------------------------------------------------------|
+| GET    | /api/pomodoro/settings  | Aktuelle Einstellungen                                                |
+| PUT    | /api/pomodoro/settings  | Body: beliebige Teilmenge der Settings-Felder                        |
+| GET    | /api/pomodoro/active    | Aktueller Zustand + serverseitig berechnete `phase_duration_seconds` |
+| POST   | /api/pomodoro/start     | Body: `{ project, description? }`. 400 falls bereits ein Timer läuft |
+| POST   | /api/pomodoro/skip      | Phase sofort beenden (gleiche Logik wie automatischer Phasenwechsel) |
+| POST   | /api/pomodoro/continue  | Nur bei `awaiting_confirmation` — startet die bereits gesetzte nächste Phase |
+| POST   | /api/pomodoro/stop      | Session abbrechen, zugehörigen `time_entry` sauber abschließen       |
 
 ---
 
@@ -347,6 +381,28 @@ MAX_DAY_MINUTES  = 600   // 10h – Umbuchungsgrenze
 - "Gesamt" und "Tage mit ÜS" oben in der Karte rechnen in dieser Ansicht mit den projektbezogenen Werten, nicht mit der Tagesansicht
 
 Beispiel (Juli 2026): 11 Tage mit Tages-Überstunden, aber nur `AK6` hatte an 2 Tagen (21.07., 23.07.) allein >8h → 90min Projekt-Überstunden, obwohl `Intern` an einzelnen Tagen ebenfalls beteiligt war (aber nie allein >8h).
+
+---
+
+## Pomodoro-Timer im Detail
+
+**Treibt den echten Zeiterfassungs-Timer** (bewusste Design-Entscheidung, keine separate Fokus-Uhr): `POST /api/pomodoro/start` erstellt denselben `time_entry` wie der normale Timer-Start und lässt ihn über die gesamte Fokus-Session (mehrere Arbeits-/Pausenintervalle) durchlaufen — bei jedem Wechsel in eine Pause wird die Entry über den bestehenden `paused_at`/`paused_seconds`-Mechanismus automatisch pausiert, beim nächsten Arbeitsintervall automatisch fortgesetzt. Eine Pomodoro-Session belegt daher denselben "es läuft bereits ein Timer"-Slot wie der normale Timer (`POST /api/pomodoro/start` schlägt mit 400 fehl, wenn schon ein Timer läuft, und umgekehrt).
+
+**Kein manuelles Pausieren während einer Pomodoro-Arbeitsphase** — die klassische Pomodoro-Technik kennt keine Pause mitten im Intervall. Solange eine Session aktiv ist, zeigt `TimerPage.jsx` statt der normalen `RunningTimer`-Karte die eigenständige `PomodoroCard` (Countdown, Zyklus-Punkte, „Überspringen"/„Abbrechen" statt Start/Pause/Stop).
+
+**Serverseitiger Hintergrund-Tick (`_pomodoro_loop()`, alle 2s) treibt Phasenwechsel** — analog zum bestehenden `_imap_loop()`-Muster, damit der Zustand unabhängig vom offenen Tab konsistent bleibt (Backend ist Source of Truth, wie beim aktiven Timer). Die eigentliche Übergangslogik (`_advance_pomodoro_phase()`) wird sowohl vom Tick als auch vom manuellen `POST /api/pomodoro/skip` aufgerufen.
+
+**„Auto-Start nächste Phase" aus → Warteposition statt Auto-Weiterlauf:** ist die Einstellung deaktiviert, geht der Zustand nach Phasenende in `awaiting_confirmation=1` statt sofort weiterzulaufen; die `PomodoroCard` zeigt dann einen „Weiter"-Button (`POST /api/pomodoro/continue`). Wichtig: Beim Wechsel von Arbeit → Pause wird die Entry sofort pausiert (unabhängig vom Auto-Start), beim Wechsel von Pause → Arbeit dagegen **erst** beim tatsächlichen Start der Arbeitsphase (auto oder per `/continue`) wieder fortgesetzt — sonst würde bei deaktiviertem Auto-Start schon während der Wartephase weitergezählt.
+
+**`cycles_completed`** zählt abgeschlossene Arbeitsintervalle hochlaufend, resettet nicht automatisch nach einer langen Pause (nur bei `/stop`) — `cycles_completed % cycles_before_long_break` ergibt die Position im aktuellen Zyklus für die Punkte-Anzeige in der `PomodoroCard`.
+
+**Benachrichtigung bei Phasenwechsel:** `usePomodoro.js` erkennt Phasenwechsel durch Vergleich mit dem vorherigen Poll-Ergebnis (Polling alle 5s + bei `visibilitychange`/`focus`, gleiches Muster wie der aktive Timer) und feuert dann optional Sound (Web-Audio-API-Oszillator-Beep, kein Audio-Asset im Repo nötig) und/oder Browser-`Notification`, je nach `sound_enabled`/`notifications_enabled` in den Pomodoro-Settings. Notification-Permission wird beim ersten Start einer Session bzw. beim Aktivieren in den Settings angefragt.
+
+**`usePomodoro()` läuft zentral in `App.jsx`** (nicht in `TimerPage.jsx`) — genau wie `activeTimer` — und wird per Prop an `TimerPage` durchgereicht. Grund: nur so ist der Zustand app-weit bekannt, unabhängig davon welche Seite gerade offen ist (nötig für die Navigationssperre, siehe unten, und damit Sound/Notification/Cross-Device-Sync nicht nur auf der Timer-Seite funktionieren).
+
+**Navigationssperre während einer aktiven Session:** Solange `pomodoro.state.phase` gesetzt ist, werden in `Sidebar`/`BottomNav` (`App.jsx`) alle Menüpunkte außer „Timer" optisch deaktiviert (reduzierte Opazität, 🔒-Badge, `title`-Tooltip) und ihr Klick per `preventDefault()` unterbunden. Zusätzlich erzwingt ein `useEffect` in `App()` per `navigate('/', { replace: true })` einen Redirect auf die Timer-Seite, falls per direkter URL-Eingabe (oder weil die Session von einem anderen Gerät gestartet wurde) eine andere Route aktiv ist. Der Timer-Menüpunkt selbst bleibt immer erreichbar.
+
+**Master-Schalter `enabled`:** Ist Pomodoro in den Settings deaktiviert, verschwindet der „🍅 Als Pomodoro starten"-Button auf der Timer-Seite und `POST /api/pomodoro/start` lehnt mit 400 ab — Durchsetzung also auf beiden Seiten (Frontend blendet aus, Backend validiert zusätzlich), analog zum bestehenden „Ein Timer läuft bereits"-Guard.
 
 ---
 
@@ -496,5 +552,7 @@ cd frontend && npm install && npm run dev
 | v3.7    | Cross-Device-Sync per Polling: `activeTimer` alle 10s + bei Tab-Fokus, Tagesdaten alle 15s + bei Tab-Fokus — Timer-Start/Stop/Pause auf einem Gerät erscheint automatisch auf anderen, ohne Reload |
 | v3.8    | Sync-Intervalle von 10s/15s auf einheitlich 5s verkürzt (weniger Zeitversatz zwischen Geräten) |
 | v3.9    | Verlauf-Badge (gewähltes Projekt) auch in der mobilen Bottom-Nav sichtbar, nicht mehr nur in der Desktop-Sidebar |
+| v4.0    | Pomodoro-Timer: treibt den echten Zeiterfassungs-Timer (auto Pause/Resume via `paused_at`/`paused_seconds`), konfigurierbar in den Settings (Dauern, Zyklen, Auto-Start, Ton, Notifications), serverseitiger Hintergrund-Tick für Phasenwechsel, `PomodoroCard` auf der Timer-Seite |
+| v4.1    | Pomodoro: Master-Schalter zum kompletten Deaktivieren (Frontend + Backend-Guard), Navigation zu anderen Menüpunkten während aktiver Session gesperrt (`usePomodoro()` dafür nach `App.jsx` gehoben), SVG-Favicon im Epoch-Uhr-Design |
 
-**Aktuelle Version: v3.9**
+**Aktuelle Version: v4.1**

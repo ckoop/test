@@ -1,4 +1,4 @@
-import { Routes, Route, NavLink } from 'react-router-dom'
+import { Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import dayjs from 'dayjs'
 import isoWeek from 'dayjs/plugin/isoWeek'
@@ -11,10 +11,11 @@ import MailPage      from './pages/MailPage'
 import SettingsPage from './pages/SettingsPage'
 import { api } from './api'
 import { useTimer, fmtDuration } from './hooks/useTimer'
+import { usePomodoro } from './hooks/usePomodoro'
 
 dayjs.extend(isoWeek)
 
-export const APP_VERSION = 'v3.9'
+export const APP_VERSION = 'v4.1'
 
 const NAV = [
   { to: '/',        label: 'Timer',   Icon: IcoTimer   },
@@ -32,6 +33,17 @@ export default function App() {
   const [statsMonth, setStatsMonth] = useState(dayjs().month() + 1)
   const [historyProject, setHistoryProject] = useState('')
   const [imapConfigured, setImapConfigured] = useState(null)
+  const pomodoro = usePomodoro()
+  const pomodoroActive = !!pomodoro.state?.phase
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  // Andere Menüpunkte sind gesperrt solange eine Pomodoro-Session läuft — bei
+  // direkter URL-Navigation (oder wenn die Session anderswo gestartet wurde) zurück zum Timer.
+  useEffect(() => {
+    if (pomodoroActive && location.pathname !== '/') navigate('/', { replace: true })
+  }, [pomodoroActive, location.pathname, navigate])
+
   useEffect(() => {
     const refreshActiveTimer = () => api.getActive().then(setActiveTimer).catch(() => {})
     refreshActiveTimer()
@@ -74,10 +86,10 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <Sidebar hasActive={!!activeTimer} isPaused={isPaused} badges={badges} />
+      <Sidebar hasActive={!!activeTimer} isPaused={isPaused} badges={badges} locked={pomodoroActive} />
       <div className="main-area">
         <Routes>
-          <Route path="/"        element={<TimerPage   activeTimer={activeTimer} setActiveTimer={setActiveTimer} />} />
+          <Route path="/"        element={<TimerPage   activeTimer={activeTimer} setActiveTimer={setActiveTimer} pomodoro={pomodoro} />} />
           <Route path="/woche"   element={<WeekPage />} />
           <Route path="/verlauf" element={<HistoryPage projectFilter={historyProject} setProjectFilter={setHistoryProject} />} />
           <Route path="/stats"   element={<StatsPage year={statsYear} month={statsMonth} setYear={setStatsYear} setMonth={setStatsMonth} />} />
@@ -86,7 +98,7 @@ export default function App() {
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </div>
-      <BottomNav hasActive={!!activeTimer} isPaused={isPaused} badges={mobileBadges} />
+      <BottomNav hasActive={!!activeTimer} isPaused={isPaused} badges={mobileBadges} locked={pomodoroActive} />
     </div>
   )
 }
@@ -96,32 +108,42 @@ function RunningBadge({ activeTimer }) {
   return <>{activeTimer.paused_at && '⏸ '}{fmtDuration(elapsed)}</>
 }
 
-function Sidebar({ hasActive, isPaused, badges }) {
+function Sidebar({ hasActive, isPaused, badges, locked }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">Epoch</div>
       <div className="sidebar-version">{APP_VERSION}</div>
       <nav className="sidebar-nav">
-        {NAV.map(({ to, label, Icon }) => (
-          <NavLink key={to} to={to} end={to === '/'} className={({ isActive }) => 'sidebar-link' + (isActive ? ' active' : '')}>
-            {({ isActive }) => (
-              <>
-                <span className="sidebar-icon-wrap">
-                  <Icon active={isActive} />
-                  {to === '/' && hasActive && <span className={'sidebar-live-dot' + (isPaused ? ' paused' : '')} />}
-                </span>
-                {label}
-                {badges[to] && <span className="sidebar-badge">{badges[to]}</span>}
-              </>
-            )}
-          </NavLink>
-        ))}
+        {NAV.map(({ to, label, Icon }) => {
+          const isLocked = locked && to !== '/'
+          return (
+            <NavLink
+              key={to} to={to} end={to === '/'}
+              onClick={e => { if (isLocked) e.preventDefault() }}
+              className={({ isActive }) => 'sidebar-link' + (isActive ? ' active' : '') + (isLocked ? ' locked' : '')}
+              style={isLocked ? { opacity: .35, cursor: 'not-allowed' } : undefined}
+              title={isLocked ? 'Gesperrt während Pomodoro läuft' : undefined}
+              aria-disabled={isLocked || undefined}
+            >
+              {({ isActive }) => (
+                <>
+                  <span className="sidebar-icon-wrap">
+                    <Icon active={isActive} />
+                    {to === '/' && hasActive && <span className={'sidebar-live-dot' + (isPaused ? ' paused' : '')} />}
+                  </span>
+                  {label}
+                  {isLocked ? <span className="sidebar-badge">🔒</span> : badges[to] && <span className="sidebar-badge">{badges[to]}</span>}
+                </>
+              )}
+            </NavLink>
+          )
+        })}
       </nav>
     </aside>
   )
 }
 
-function BottomNav({ hasActive, isPaused, badges }) {
+function BottomNav({ hasActive, isPaused, badges, locked }) {
   return (
     <nav className="bottom-nav" style={{
       position: 'fixed', bottom: 0, left: 0, right: 0,
@@ -133,36 +155,47 @@ function BottomNav({ hasActive, isPaused, badges }) {
       display: 'flex', alignItems: 'flex-start', justifyContent: 'space-around',
       zIndex: 100,
     }}>
-      {NAV.map(({ to, label, Icon }) => (
-        <NavLink key={to} to={to} end={to === '/'} style={({ isActive }) => ({
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-          padding: '10px 4px', textDecoration: 'none',
-          color: isActive ? 'var(--accent)' : 'var(--text3)',
-          fontFamily: 'var(--sans)', fontSize: 8, fontWeight: 700,
-          textTransform: 'uppercase', letterSpacing: '.09em',
-          transition: 'color .15s', position: 'relative', flex: 1,
-        })}>
-          {({ isActive }) => (
-            <>
-              <span style={{ position: 'relative' }}>
-                <Icon active={isActive} />
-                {to === '/' && hasActive && (
-                  <span style={{ position: 'absolute', top: -1, right: -3, width: 5, height: 5, borderRadius: '50%', background: isPaused ? 'var(--amber)' : 'var(--accent)' }} />
+      {NAV.map(({ to, label, Icon }) => {
+        const isLocked = locked && to !== '/'
+        return (
+          <NavLink
+            key={to} to={to} end={to === '/'}
+            onClick={e => { if (isLocked) e.preventDefault() }}
+            title={isLocked ? 'Gesperrt während Pomodoro läuft' : undefined}
+            aria-disabled={isLocked || undefined}
+            style={({ isActive }) => ({
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
+              padding: '10px 4px', textDecoration: 'none',
+              color: isActive ? 'var(--accent)' : 'var(--text3)',
+              fontFamily: 'var(--sans)', fontSize: 8, fontWeight: 700,
+              textTransform: 'uppercase', letterSpacing: '.09em',
+              transition: 'color .15s', position: 'relative', flex: 1,
+              opacity: isLocked ? .35 : 1, cursor: isLocked ? 'not-allowed' : 'pointer',
+            })}>
+            {({ isActive }) => (
+              <>
+                <span style={{ position: 'relative' }}>
+                  <Icon active={isActive} />
+                  {to === '/' && hasActive && (
+                    <span style={{ position: 'absolute', top: -1, right: -3, width: 5, height: 5, borderRadius: '50%', background: isPaused ? 'var(--amber)' : 'var(--accent)' }} />
+                  )}
+                </span>
+                {label}
+                {isLocked ? (
+                  <span style={{ fontSize: 8 }}>🔒</span>
+                ) : badges?.[to] && (
+                  <span style={{
+                    fontFamily: 'var(--mono)', fontSize: 7, fontWeight: 400,
+                    textTransform: 'none', letterSpacing: 0,
+                    color: isActive ? 'var(--accent)' : 'var(--text3)',
+                    maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>{badges[to]}</span>
                 )}
-              </span>
-              {label}
-              {badges?.[to] && (
-                <span style={{
-                  fontFamily: 'var(--mono)', fontSize: 7, fontWeight: 400,
-                  textTransform: 'none', letterSpacing: 0,
-                  color: isActive ? 'var(--accent)' : 'var(--text3)',
-                  maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>{badges[to]}</span>
-              )}
-            </>
-          )}
-        </NavLink>
-      ))}
+              </>
+            )}
+          </NavLink>
+        )
+      })}
     </nav>
   )
 }

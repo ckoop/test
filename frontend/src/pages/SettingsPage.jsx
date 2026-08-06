@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { api } from '../api'
 import { useProjects, invalidateProjects } from '../hooks/useProjects'
 
@@ -70,6 +70,8 @@ export default function SettingsPage() {
           <button onClick={() => setError(null)} style={{ float: 'right', background: 'none', border: 'none', color: 'var(--red)', cursor: 'pointer', fontSize: 14 }}>✕</button>
         </div>
       )}
+
+      <PomodoroSettingsCard />
 
       {/* ── New project ── */}
       <div className="card" style={{ marginBottom: 16 }}>
@@ -178,6 +180,91 @@ export default function SettingsPage() {
         <strong style={{ color: 'var(--text)' }}>Hinweis:</strong> Projekte die bereits in Einträgen verwendet werden, können nicht gelöscht — nur archiviert werden. Archivierte Projekte erscheinen nicht mehr in der Auswahl.
       </div>
     </div>
+  )
+}
+
+function PomodoroSettingsCard() {
+  const [settings, setSettings] = useState(null)
+  const [saving, setSaving]     = useState(false)
+  const [saved, setSaved]       = useState(false)
+  const [error, setError]       = useState(null)
+
+  useEffect(() => { api.getPomodoroSettings().then(setSettings).catch(e => setError(e.message)) }, [])
+
+  const update = (field, value) => setSettings(s => ({ ...s, [field]: value }))
+
+  const handleSave = async () => {
+    setSaving(true); setError(null)
+    try {
+      const updated = await api.updatePomodoroSettings(settings)
+      setSettings(updated)
+      if (updated.notifications_enabled && 'Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission()
+      }
+      setSaved(true); setTimeout(() => setSaved(false), 2500)
+    } catch (e) { setError(e.message) }
+    finally { setSaving(false) }
+  }
+
+  if (!settings) return null
+  const enabled = !!settings.enabled
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div className="label" style={{ marginBottom: 0 }}>🍅 Pomodoro</div>
+        <ToggleButton active={enabled} label={enabled ? 'Aktiviert' : 'Deaktiviert'} onClick={() => update('enabled', enabled ? 0 : 1)} />
+      </div>
+      {error && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 10 }}>{error}</div>}
+      {enabled ? (
+        <>
+          <div className="grid2" style={{ marginBottom: 10 }}>
+            <NumberField label="Arbeitsdauer (min)" value={settings.work_minutes} onChange={v => update('work_minutes', v)} />
+            <NumberField label="Zyklen bis lange Pause" value={settings.cycles_before_long_break} onChange={v => update('cycles_before_long_break', v)} />
+            <NumberField label="Kurze Pause (min)" value={settings.short_break_minutes} onChange={v => update('short_break_minutes', v)} />
+            <NumberField label="Lange Pause (min)" value={settings.long_break_minutes} onChange={v => update('long_break_minutes', v)} />
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+            <ToggleButton active={!!settings.auto_start_next} label="Auto-Start nächste Phase" onClick={() => update('auto_start_next', settings.auto_start_next ? 0 : 1)} />
+            <ToggleButton active={!!settings.sound_enabled} label="Ton" onClick={() => update('sound_enabled', settings.sound_enabled ? 0 : 1)} />
+            <ToggleButton active={!!settings.notifications_enabled} label="Benachrichtigungen" onClick={() => update('notifications_enabled', settings.notifications_enabled ? 0 : 1)} />
+          </div>
+        </>
+      ) : (
+        <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 14 }}>
+          Deaktiviert — auf der Timer-Seite steht nur der normale Timer zur Verfügung.
+        </div>
+      )}
+      <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+        {saving ? '…' : saved ? '✓ Gespeichert' : '✓ Speichern'}
+      </button>
+    </div>
+  )
+}
+
+function NumberField({ label, value, onChange }) {
+  return (
+    <div>
+      <div className="label" style={{ marginBottom: 5, fontSize: 9 }}>{label}</div>
+      <input type="number" min={1} value={value} onChange={e => onChange(Math.max(1, parseInt(e.target.value) || 1))} />
+    </div>
+  )
+}
+
+function ToggleButton({ active, label, onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="btn btn-ghost"
+      style={{
+        fontSize: 11, padding: '7px 12px',
+        borderColor: active ? 'rgba(200,240,96,.4)' : 'var(--border2)',
+        background: active ? 'var(--accent-dim)' : 'transparent',
+        color: active ? 'var(--accent)' : 'var(--text2)',
+      }}
+    >
+      {active ? '✓ ' : ''}{label}
+    </button>
   )
 }
 

@@ -4,13 +4,14 @@ import 'dayjs/locale/de'
 import { api } from '../api'
 import { useTimer, fmtDuration, fmtMinutes, fmtTime } from '../hooks/useTimer'
 import { useProjectNames } from '../hooks/useProjects'
+import { POMODORO_PHASE_LABELS } from '../hooks/usePomodoro'
 import OvertimeBanner from './OvertimeBanner'
 
 dayjs.locale('de')
 
 const MOODS    = ['😞', '😕', '😐', '🙂', '😄']
 
-export default function TimerPage({ activeTimer, setActiveTimer }) {
+export default function TimerPage({ activeTimer, setActiveTimer, pomodoro }) {
   const [project, setProject]       = useState('Allgemein')
   const [description, setDescription] = useState('')
   const [loading, setLoading]       = useState(false)
@@ -24,6 +25,8 @@ export default function TimerPage({ activeTimer, setActiveTimer }) {
   const { names: projectNames } = useProjectNames()
   const elapsed = useTimer(activeTimer?.start_time, activeTimer?.paused_at, activeTimer?.paused_seconds)
   const isPaused = !!activeTimer?.paused_at
+  const pomodoroActive = !!pomodoro.state?.phase
+  const pomodoroEnabled = pomodoro.settings ? !!pomodoro.settings.enabled : true
   const today   = dayjs().format('YYYY-MM-DD')
 
   const loadToday = useCallback(() => {
@@ -108,11 +111,13 @@ export default function TimerPage({ activeTimer, setActiveTimer }) {
       {error && <div style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: 'var(--r)', padding: '9px 12px', marginBottom: 12, fontSize: 13, color: 'var(--red)' }}>{error}</div>}
 
       {/* Timer card */}
-      <div className="card" style={{ marginBottom: 12, borderColor: activeTimer ? 'rgba(200,240,96,.25)' : 'var(--border)' }}>
-        {activeTimer ? (
+      <div className="card" style={{ marginBottom: 12, borderColor: (activeTimer || pomodoroActive) ? 'rgba(200,240,96,.25)' : 'var(--border)' }}>
+        {pomodoroActive ? (
+          <PomodoroCard pomodoro={pomodoro} />
+        ) : activeTimer ? (
           <RunningTimer activeTimer={activeTimer} elapsed={elapsed} isPaused={isPaused} onStop={handleStop} onPause={handlePause} onResume={handleResume} loading={loading} />
         ) : (
-          <StartTimer project={project} setProject={setProject} description={description} setDescription={setDescription} onStart={handleStart} loading={loading} projectNames={projectNames} />
+          <StartTimer project={project} setProject={setProject} description={description} setDescription={setDescription} onStart={handleStart} loading={loading} projectNames={projectNames} pomodoroEnabled={pomodoroEnabled} onStartPomodoro={() => pomodoro.start({ project, description: description || undefined }).then(() => setDescription(''))} />
         )}
       </div>
 
@@ -195,7 +200,7 @@ function RunningTimer({ activeTimer, elapsed, isPaused, onStop, onPause, onResum
   )
 }
 
-function StartTimer({ project, setProject, description, setDescription, onStart, loading, projectNames }) {
+function StartTimer({ project, setProject, description, setDescription, onStart, loading, projectNames, pomodoroEnabled, onStartPomodoro }) {
   return (
     <div>
       <div className="label" style={{ marginBottom: 10 }}>Neuer Eintrag</div>
@@ -203,9 +208,66 @@ function StartTimer({ project, setProject, description, setDescription, onStart,
         {projectNames.map(p => <option key={p}>{p}</option>)}
       </select>
       <input type="text" placeholder="Woran arbeitest du? (optional)" value={description} onChange={e => setDescription(e.target.value)} onKeyDown={e => e.key === 'Enter' && onStart()} style={{ marginBottom: 12 }} />
-      <button className="btn btn-primary" onClick={onStart} disabled={loading}>
-        {loading ? '…' : '▶ Timer starten'}
-      </button>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="btn btn-primary" style={{ flex: 1 }} onClick={onStart} disabled={loading}>
+          {loading ? '…' : '▶ Timer starten'}
+        </button>
+        {pomodoroEnabled && (
+          <button className="btn btn-ghost" style={{ flex: 1, justifyContent: 'center' }} onClick={onStartPomodoro} disabled={loading}>
+            🍅 Als Pomodoro starten
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Pomodoro Card ──────────────────────────────────────────────────────────────
+function PomodoroCard({ pomodoro }) {
+  const { state, settings, remainingMs, skip, continueSession, stop } = pomodoro
+  const [loading, setLoading] = useState(false)
+  const phase = state.phase
+  const label = POMODORO_PHASE_LABELS[phase] || phase
+  const isBreak = phase === 'short_break' || phase === 'long_break'
+  const color = isBreak ? 'var(--amber)' : 'var(--accent)'
+  const cyclesTotal  = settings?.cycles_before_long_break || 4
+  const cyclesFilled = state.cycles_completed % cyclesTotal
+
+  const run = (fn) => { setLoading(true); fn().finally(() => setLoading(false)) }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+        {state.awaiting_confirmation ? <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--amber)', flexShrink: 0 }} /> : <span className="pulse" />}
+        <span className="mono" style={{ fontSize: 10, color, textTransform: 'uppercase', letterSpacing: '.1em' }}>🍅 {label}</span>
+        {state.project && <span style={{ marginLeft: 'auto' }} className="tag tag-g">{state.project}</span>}
+      </div>
+
+      {state.awaiting_confirmation ? (
+        <>
+          <div style={{ fontSize: 14, color: 'var(--text2)', marginBottom: 18 }}>{label} bereit — weiter?</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => run(continueSession)} disabled={loading}>▶ Weiter</button>
+            <button className="btn btn-danger" style={{ flex: 1 }} onClick={() => run(stop)} disabled={loading}>■ Abbrechen</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="mono" style={{ fontSize: 50, fontWeight: 300, color, letterSpacing: '-.02em', lineHeight: 1, marginBottom: 6 }}>
+            {fmtDuration(remainingMs)}
+          </div>
+          {state.description && <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 6 }}>{state.description}</div>}
+          <div style={{ display: 'flex', gap: 5, marginBottom: 18 }}>
+            {Array.from({ length: cyclesTotal }).map((_, i) => (
+              <span key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: i < cyclesFilled ? 'var(--accent)' : 'var(--border2)' }} />
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-ghost" style={{ flex: 1, justifyContent: 'center' }} onClick={() => run(skip)} disabled={loading}>⏭ Überspringen</button>
+            <button className="btn btn-danger" style={{ flex: 1 }} onClick={() => run(stop)} disabled={loading}>■ Abbrechen</button>
+          </div>
+        </>
+      )}
     </div>
   )
 }

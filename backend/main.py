@@ -64,6 +64,30 @@ class Project(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class PomodoroSettings(Base):
+    __tablename__ = "pomodoro_settings"
+    id                       = Column(Integer, primary_key=True, default=1)
+    enabled                  = Column(Integer, nullable=False, default=1)
+    work_minutes             = Column(Integer, nullable=False, default=25)
+    short_break_minutes      = Column(Integer, nullable=False, default=5)
+    long_break_minutes       = Column(Integer, nullable=False, default=15)
+    cycles_before_long_break = Column(Integer, nullable=False, default=4)
+    auto_start_next          = Column(Integer, nullable=False, default=0)  # bool as int
+    sound_enabled            = Column(Integer, nullable=False, default=1)
+    notifications_enabled    = Column(Integer, nullable=False, default=1)
+
+
+class PomodoroState(Base):
+    __tablename__ = "pomodoro_state"
+    id                    = Column(Integer, primary_key=True, default=1)
+    phase                 = Column(String(20), nullable=True)   # None | 'work' | 'short_break' | 'long_break'
+    phase_start           = Column(DateTime, nullable=True)     # UTC, None while awaiting_confirmation
+    cycles_completed      = Column(Integer, nullable=False, default=0)
+    awaiting_confirmation = Column(Integer, nullable=False, default=0)
+    project               = Column(String(200), nullable=True)
+    description           = Column(String(500), nullable=True)
+
+
 Base.metadata.create_all(bind=engine)
 
 
@@ -76,6 +100,9 @@ def _migrate_columns():
             conn.exec_driver_sql("ALTER TABLE time_entries ADD COLUMN paused_at DATETIME")
         if "paused_seconds" not in cols:
             conn.exec_driver_sql("ALTER TABLE time_entries ADD COLUMN paused_seconds FLOAT NOT NULL DEFAULT 0")
+        pomodoro_cols = {row[1] for row in conn.exec_driver_sql("PRAGMA table_info(pomodoro_settings)")}
+        if pomodoro_cols and "enabled" not in pomodoro_cols:
+            conn.exec_driver_sql("ALTER TABLE pomodoro_settings ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
         conn.commit()
 
 _migrate_columns()
@@ -101,6 +128,21 @@ def _seed_projects():
         db.close()
 
 _seed_projects()
+
+
+# ── Seed Pomodoro singleton rows ──────────────────────────────────────────────
+def _seed_pomodoro():
+    db = SessionLocal()
+    try:
+        if db.query(PomodoroSettings).count() == 0:
+            db.add(PomodoroSettings(id=1))
+        if db.query(PomodoroState).count() == 0:
+            db.add(PomodoroState(id=1))
+        db.commit()
+    finally:
+        db.close()
+
+_seed_pomodoro()
 
 
 # ── Schemas ─────────────────────────────────────────────────────────────────────
@@ -173,6 +215,44 @@ class ProjectUpdate(BaseModel):
     color: Optional[str] = None
     position: Optional[int] = None
     active: Optional[int] = None
+
+
+class PomodoroSettingsOut(BaseModel):
+    enabled: int
+    work_minutes: int
+    short_break_minutes: int
+    long_break_minutes: int
+    cycles_before_long_break: int
+    auto_start_next: int
+    sound_enabled: int
+    notifications_enabled: int
+    model_config = {"from_attributes": True}
+
+
+class PomodoroSettingsUpdate(BaseModel):
+    enabled: Optional[int] = None
+    work_minutes: Optional[int] = None
+    short_break_minutes: Optional[int] = None
+    long_break_minutes: Optional[int] = None
+    cycles_before_long_break: Optional[int] = None
+    auto_start_next: Optional[int] = None
+    sound_enabled: Optional[int] = None
+    notifications_enabled: Optional[int] = None
+
+
+class PomodoroStart(BaseModel):
+    project: Optional[str] = "Allgemein"
+    description: Optional[str] = None
+
+
+class PomodoroActiveOut(BaseModel):
+    phase: Optional[str]
+    phase_start: Optional[datetime]
+    phase_duration_seconds: Optional[int]
+    cycles_completed: int
+    awaiting_confirmation: bool
+    project: Optional[str]
+    description: Optional[str]
 
 
 class MailLogOut(BaseModel):
@@ -284,11 +364,11 @@ def resume_timer(db: Session = Depends(get_db)):
     db.commit(); db.refresh(active)
     return active
 
-@app.post("/api/timer/stop", response_model=TimeEntryOut)
-def stop_timer(db: Session = Depends(get_db)):
+def _stop_active_entry(db: Session) -> Optional[TimeEntry]:
+    """Finalize the currently open TimeEntry (if any), whether running or paused."""
     active = db.query(TimeEntry).filter(TimeEntry.end_time == None).first()
     if not active:
-        raise HTTPException(404, "Kein aktiver Timer")
+        return None
     now = datetime.utcnow()
     if active.paused_at is not None:
         active.paused_seconds += (now - active.paused_at).total_seconds()
@@ -298,9 +378,148 @@ def stop_timer(db: Session = Depends(get_db)):
     db.commit(); db.refresh(active)
     return active
 
+@app.post("/api/timer/stop", response_model=TimeEntryOut)
+def stop_timer(db: Session = Depends(get_db)):
+    active = _stop_active_entry(db)
+    if not active:
+        raise HTTPException(404, "Kein aktiver Timer")
+    return active
+
 @app.get("/api/timer/active", response_model=Optional[TimeEntryOut])
 def get_active(db: Session = Depends(get_db)):
     return db.query(TimeEntry).filter(TimeEntry.end_time == None).first()
+
+
+# ── Pomodoro ────────────────────────────────────────────────────────────────────
+
+def _phase_duration_minutes(phase: str, settings: PomodoroSettings) -> int:
+    return {
+        "work": settings.work_minutes,
+        "short_break": settings.short_break_minutes,
+        "long_break": settings.long_break_minutes,
+    }[phase]
+
+def _get_pomodoro_settings(db: Session) -> PomodoroSettings:
+    return db.query(PomodoroSettings).filter(PomodoroSettings.id == 1).first()
+
+def _get_pomodoro_state(db: Session) -> PomodoroState:
+    return db.query(PomodoroState).filter(PomodoroState.id == 1).first()
+
+def _advance_pomodoro_phase(db: Session) -> PomodoroState:
+    """Ends the current pomodoro phase and transitions to the next one (break<->work),
+    pausing/resuming the driven TimeEntry accordingly. Used by the background tick and by /skip."""
+    state = _get_pomodoro_state(db)
+    settings = _get_pomodoro_settings(db)
+    if not state.phase:
+        raise HTTPException(404, "Keine aktive Pomodoro-Session")
+    now = datetime.utcnow()
+    active_entry = db.query(TimeEntry).filter(TimeEntry.end_time == None).first()
+
+    if state.phase == "work":
+        # work interval over -> pause the driven entry regardless of auto-start
+        # (it only resumes once the next work phase actually starts, see below / /continue)
+        if active_entry and active_entry.paused_at is None:
+            active_entry.paused_at = now
+        state.cycles_completed += 1
+        next_phase = "long_break" if state.cycles_completed % settings.cycles_before_long_break == 0 else "short_break"
+    else:
+        next_phase = "work"
+
+    state.phase = next_phase
+    if settings.auto_start_next:
+        state.phase_start = now
+        state.awaiting_confirmation = 0
+        if next_phase == "work" and active_entry and active_entry.paused_at is not None:
+            active_entry.paused_seconds += (now - active_entry.paused_at).total_seconds()
+            active_entry.paused_at = None
+    else:
+        state.phase_start = None
+        state.awaiting_confirmation = 1
+
+    db.commit(); db.refresh(state)
+    return state
+
+@app.get("/api/pomodoro/settings", response_model=PomodoroSettingsOut)
+def get_pomodoro_settings(db: Session = Depends(get_db)):
+    return _get_pomodoro_settings(db)
+
+@app.put("/api/pomodoro/settings", response_model=PomodoroSettingsOut)
+def update_pomodoro_settings(body: PomodoroSettingsUpdate, db: Session = Depends(get_db)):
+    settings = _get_pomodoro_settings(db)
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(settings, field, value)
+    db.commit(); db.refresh(settings)
+    return settings
+
+@app.get("/api/pomodoro/active", response_model=PomodoroActiveOut)
+def get_pomodoro_active(db: Session = Depends(get_db)):
+    state = _get_pomodoro_state(db)
+    settings = _get_pomodoro_settings(db)
+    duration = _phase_duration_minutes(state.phase, settings) * 60 if state.phase else None
+    return PomodoroActiveOut(
+        phase=state.phase, phase_start=state.phase_start, phase_duration_seconds=duration,
+        cycles_completed=state.cycles_completed, awaiting_confirmation=bool(state.awaiting_confirmation),
+        project=state.project, description=state.description,
+    )
+
+@app.post("/api/pomodoro/start", response_model=PomodoroActiveOut)
+def start_pomodoro(body: PomodoroStart, db: Session = Depends(get_db)):
+    settings = _get_pomodoro_settings(db)
+    if not settings.enabled:
+        raise HTTPException(400, "Pomodoro ist in den Einstellungen deaktiviert")
+    if db.query(TimeEntry).filter(TimeEntry.end_time == None).first():
+        raise HTTPException(400, "Ein Timer läuft bereits")
+    state = _get_pomodoro_state(db)
+    if state.phase:
+        raise HTTPException(400, "Es läuft bereits eine Pomodoro-Session")
+    now = datetime.utcnow()
+    entry = TimeEntry(start_time=now, date=date.today(),
+                       project=body.project or "Allgemein", description=body.description, source=0)
+    db.add(entry)
+    state.phase = "work"
+    state.phase_start = now
+    state.cycles_completed = 0
+    state.awaiting_confirmation = 0
+    state.project = body.project or "Allgemein"
+    state.description = body.description
+    db.commit(); db.refresh(state)
+    return get_pomodoro_active(db)
+
+@app.post("/api/pomodoro/skip", response_model=PomodoroActiveOut)
+def skip_pomodoro(db: Session = Depends(get_db)):
+    _advance_pomodoro_phase(db)
+    return get_pomodoro_active(db)
+
+@app.post("/api/pomodoro/continue", response_model=PomodoroActiveOut)
+def continue_pomodoro(db: Session = Depends(get_db)):
+    state = _get_pomodoro_state(db)
+    if not state.phase or not state.awaiting_confirmation:
+        raise HTTPException(400, "Keine Pomodoro-Session wartet auf Bestätigung")
+    now = datetime.utcnow()
+    if state.phase == "work":
+        active_entry = db.query(TimeEntry).filter(TimeEntry.end_time == None).first()
+        if active_entry and active_entry.paused_at is not None:
+            active_entry.paused_seconds += (now - active_entry.paused_at).total_seconds()
+            active_entry.paused_at = None
+    state.phase_start = now
+    state.awaiting_confirmation = 0
+    db.commit(); db.refresh(state)
+    return get_pomodoro_active(db)
+
+@app.post("/api/pomodoro/stop", response_model=PomodoroActiveOut)
+def stop_pomodoro(db: Session = Depends(get_db)):
+    state = _get_pomodoro_state(db)
+    if not state.phase:
+        raise HTTPException(404, "Keine aktive Pomodoro-Session")
+    _stop_active_entry(db)
+    state.phase = None
+    state.phase_start = None
+    state.cycles_completed = 0
+    state.awaiting_confirmation = 0
+    state.project = None
+    state.description = None
+    db.commit(); db.refresh(state)
+    return get_pomodoro_active(db)
 
 
 # ── Entries ─────────────────────────────────────────────────────────────────────
@@ -929,9 +1148,28 @@ async def _imap_loop():
                 log.error(f"IMAP loop error: {ex}")
         await asyncio.sleep(interval)
 
+async def _pomodoro_loop():
+    while True:
+        try:
+            db = SessionLocal()
+            try:
+                state = _get_pomodoro_state(db)
+                settings = _get_pomodoro_settings(db)
+                if state.phase and not state.awaiting_confirmation and state.phase_start:
+                    duration = _phase_duration_minutes(state.phase, settings) * 60
+                    elapsed = (datetime.utcnow() - state.phase_start).total_seconds()
+                    if elapsed >= duration:
+                        _advance_pomodoro_phase(db)
+            finally:
+                db.close()
+        except Exception as ex:
+            log.error(f"Pomodoro loop error: {ex}")
+        await asyncio.sleep(2)
+
 @app.on_event("startup")
 async def startup():
     asyncio.create_task(_imap_loop())
+    asyncio.create_task(_pomodoro_loop())
 
 
 # ── Stats ── (monthly already above, add mail stats) ─────────────────────────────
