@@ -160,7 +160,7 @@ export default function ExportPage() {
       <div className="label" style={{ marginTop: 20, marginBottom: 9 }}>Tageszusammenfassung</div>
       <div className="card">
         <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.6, marginBottom: 12 }}>
-          Listet pro Tag und Projekt alle Tätigkeiten chronologisch mit Dauer in Stunden — z. B. „AK6 – Daily Stadler (0.5h), Abstimmung intern (1h)".
+          Listet pro Tag und Projekt alle Tätigkeiten chronologisch mit Dauer in Stunden — z. B. „Support – Daily Standup (0.5h), Abstimmung intern (1h)".
         </div>
         {summaryError && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 10 }}>{summaryError}</div>}
         {summaryText === null ? (

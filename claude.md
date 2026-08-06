@@ -380,7 +380,7 @@ MAX_DAY_MINUTES  = 600   // 10h – Umbuchungsgrenze
 - Pro Projekt wird die Liste der beitragenden Tage mit Datum angezeigt (wie in der Pro-Tag-Ansicht)
 - "Gesamt" und "Tage mit ÜS" oben in der Karte rechnen in dieser Ansicht mit den projektbezogenen Werten, nicht mit der Tagesansicht
 
-Beispiel (Juli 2026): 11 Tage mit Tages-Überstunden, aber nur `AK6` hatte an 2 Tagen (21.07., 23.07.) allein >8h → 90min Projekt-Überstunden, obwohl `Intern` an einzelnen Tagen ebenfalls beteiligt war (aber nie allein >8h).
+Beispiel (Juli 2026): 11 Tage mit Tages-Überstunden, aber nur `Support` hatte an 2 Tagen (21.07., 23.07.) allein >8h → 90min Projekt-Überstunden, obwohl `Entwicklung` an einzelnen Tagen ebenfalls beteiligt war (aber nie allein >8h).
 
 ---
 
@@ -431,7 +431,7 @@ Vorschau (`<pre>`, kopierbar über `navigator.clipboard`) und `.txt`-Download (c
 ### Eingehend (IMAP) — Pflichtformat
 ```
 Datum      | Start | Ende  | Projekt     | Beschreibung
-2026-06-01 | 09:00 | 10:00 | BR442       | Planung Roadmap Q3
+2026-06-01 | 09:00 | 10:00 | Support     | Planung Roadmap Q3
 2026-06-01 | 10:30 | 12:00 | Entwicklung | Auth-System
 ```
 **Alle 5 Spalten Pflicht.** Beschreibung darf nicht leer sein.
@@ -570,6 +570,6 @@ cd frontend && npm install && npm run dev
 | v3.9    | Verlauf-Badge (gewähltes Projekt) auch in der mobilen Bottom-Nav sichtbar, nicht mehr nur in der Desktop-Sidebar |
 | v4.0    | Pomodoro-Timer: treibt den echten Zeiterfassungs-Timer (auto Pause/Resume via `paused_at`/`paused_seconds`), konfigurierbar in den Settings (Dauern, Zyklen, Auto-Start, Ton, Notifications), serverseitiger Hintergrund-Tick für Phasenwechsel, `PomodoroCard` auf der Timer-Seite |
 | v4.1    | Pomodoro: Master-Schalter zum kompletten Deaktivieren (Frontend + Backend-Guard), Navigation zu anderen Menüpunkten während aktiver Session gesperrt (`usePomodoro()` dafür nach `App.jsx` gehoben), SVG-Favicon im Epoch-Uhr-Design |
-| v4.2    | Export: Tageszusammenfassung als Text — pro Tag und Projekt, Tätigkeiten chronologisch und unaggregiert mit Dauer in Stunden (z.B. „AK6 – Daily Stadler (0.5h), Abstimmung intern (1h)"), Vorschau (kopierbar) + .txt-Download auf der Export-Seite |
+| v4.2    | Export: Tageszusammenfassung als Text — pro Tag und Projekt, Tätigkeiten chronologisch und unaggregiert mit Dauer in Stunden (z.B. „Support – Daily Standup (0.5h), Abstimmung intern (1h)"), Vorschau (kopierbar) + .txt-Download auf der Export-Seite |
 
 **Aktuelle Version: v4.2**
