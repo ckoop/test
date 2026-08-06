@@ -1,8 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import dayjs from 'dayjs'
 import 'dayjs/locale/de'
+import { api } from '../api'
 
 dayjs.locale('de')
+
+function fmtHours(minutes) {
+  return `${Math.round((minutes / 60) * 100) / 100}h`
+}
 
 const PRESETS = [
   { label: 'Diese Woche',    from: () => dayjs().startOf('isoWeek').format('YYYY-MM-DD'),                  to: () => dayjs().format('YYYY-MM-DD') },
@@ -13,11 +18,48 @@ const PRESETS = [
   { label: 'Alles',          from: () => '2020-01-01',                                                     to: () => dayjs().format('YYYY-MM-DD') },
 ]
 
+function formatProjectDaySummary(entries) {
+  const sorted = [...entries].sort((a, b) => a.start_time.localeCompare(b.start_time))
+
+  // Datum → Projekt → Tätigkeit → Minuten. Verschachtelte Maps behalten die
+  // Einfügereihenfolge bei, ein erneutes .set() auf eine bestehende Tätigkeit
+  // verschiebt sie nicht — exakt gleiche Tätigkeiten werden so an der Stelle
+  // ihres ersten Auftretens zusammengefasst (Dauer summiert), statt mehrfach
+  // aufzutauchen.
+  const byDate = new Map()
+  for (const e of sorted) {
+    if (!byDate.has(e.date)) byDate.set(e.date, new Map())
+    const byProject = byDate.get(e.date)
+    const projectKey = e.project || 'Allgemein'
+    if (!byProject.has(projectKey)) byProject.set(projectKey, new Map())
+    const byDescription = byProject.get(projectKey)
+    const descKey = e.description || 'Sonstiges'
+    byDescription.set(descKey, (byDescription.get(descKey) || 0) + (e.duration_minutes || 0))
+  }
+
+  const blocks = []
+  for (const [date, byProject] of byDate) {
+    const header = dayjs(date).format('dddd, D. MMMM YYYY')
+    const lines = [...byProject.entries()].map(([project, byDescription]) => {
+      const parts = [...byDescription.entries()].map(([desc, minutes]) => `${desc} (${fmtHours(minutes)})`)
+      return `${project} – ${parts.join(', ')}`
+    })
+    blocks.push([header, ...lines].join('\n'))
+  }
+  return blocks.join('\n\n')
+}
+
 export default function ExportPage() {
   const [from, setFrom] = useState(dayjs().startOf('month').format('YYYY-MM-DD'))
   const [to, setTo]     = useState(dayjs().format('YYYY-MM-DD'))
   const [loading, setLoading] = useState(null)
   const [done, setDone]       = useState(null)
+  const [summaryText, setSummaryText] = useState(null)
+  const [summaryLoading, setSummaryLoading] = useState(false)
+  const [summaryError, setSummaryError]     = useState(null)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => { setSummaryText(null); setSummaryError(null) }, [from, to])
 
   const download = async (fmt) => {
     setLoading(fmt); setDone(null)
@@ -35,6 +77,30 @@ export default function ExportPage() {
       setDone(fmt); setTimeout(() => setDone(null), 3000)
     } catch (e) { alert(e.message) }
     finally { setLoading(null) }
+  }
+
+  const loadSummary = async () => {
+    setSummaryLoading(true); setSummaryError(null); setCopied(false)
+    try {
+      const entries = (await api.getEntries({ from_date: from, to_date: to })).filter(e => e.end_time)
+      setSummaryText(entries.length ? formatProjectDaySummary(entries) : 'Keine Einträge im gewählten Zeitraum.')
+    } catch (e) { setSummaryError(e.message) }
+    finally { setSummaryLoading(false) }
+  }
+
+  const copySummary = () => {
+    navigator.clipboard.writeText(summaryText).then(() => {
+      setCopied(true); setTimeout(() => setCopied(false), 2000)
+    }).catch(() => setSummaryError('Kopieren fehlgeschlagen — bitte Text manuell markieren und kopieren.'))
+  }
+
+  const downloadSummary = () => {
+    const blob = new Blob([summaryText], { type: 'text/plain;charset=utf-8' })
+    const url  = URL.createObjectURL(blob)
+    const name = `zeiterfassung_zusammenfassung_${from}_bis_${to}.txt`
+    const a    = Object.assign(document.createElement('a'), { href: url, download: name })
+    document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   const fmtLabel = (s) => dayjs(s).format('D. MMM YYYY')
@@ -88,6 +154,36 @@ export default function ExportPage() {
           loading={loading === 'json'} done={done === 'json'}
           onExport={() => download('json')}
         />
+      </div>
+
+      {/* Tageszusammenfassung */}
+      <div className="label" style={{ marginTop: 20, marginBottom: 9 }}>Tageszusammenfassung</div>
+      <div className="card">
+        <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.6, marginBottom: 12 }}>
+          Listet pro Tag und Projekt alle Tätigkeiten chronologisch mit Dauer in Stunden — z. B. „AK6 – Daily Stadler (0.5h), Abstimmung intern (1h)".
+        </div>
+        {summaryError && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 10 }}>{summaryError}</div>}
+        {summaryText === null ? (
+          <button className="btn btn-ghost w-full" style={{ justifyContent: 'center' }} onClick={loadSummary} disabled={summaryLoading}>
+            {summaryLoading ? '…' : '↻ Zusammenfassung anzeigen'}
+          </button>
+        ) : (
+          <>
+            <pre className="mono" style={{
+              whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 12, lineHeight: 1.7,
+              background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 'var(--r)',
+              padding: '12px 14px', maxHeight: 320, overflowY: 'auto', marginBottom: 10,
+            }}>{summaryText}</pre>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-ghost" style={{ flex: 1, justifyContent: 'center' }} onClick={copySummary}>
+                {copied ? '✓ Kopiert' : '📋 Kopieren'}
+              </button>
+              <button className="btn btn-ghost" style={{ flex: 1, justifyContent: 'center' }} onClick={downloadSummary}>
+                ↓ Als .txt herunterladen
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       <div style={{ marginTop: 20, padding: '12px 14px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 'var(--r)', fontSize: 12, color: 'var(--text2)', lineHeight: 1.7 }}>

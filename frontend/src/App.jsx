@@ -15,7 +15,7 @@ import { usePomodoro } from './hooks/usePomodoro'
 
 dayjs.extend(isoWeek)
 
-export const APP_VERSION = 'v4.1'
+export const APP_VERSION = 'v4.2'
 
 const NAV = [
   { to: '/',        label: 'Timer',   Icon: IcoTimer   },
