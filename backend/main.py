@@ -158,6 +158,9 @@ class TimeEntryManual(BaseModel):
     project: Optional[str] = "Allgemein"
     description: Optional[str] = None
 
+class TimerDeduct(BaseModel):
+    seconds: float
+
 class TimeEntryUpdate(BaseModel):
     start_time: Optional[str] = None
     end_time: Optional[str] = None
@@ -361,6 +364,19 @@ def resume_timer(db: Session = Depends(get_db)):
         raise HTTPException(400, "Timer ist nicht pausiert")
     active.paused_seconds += (datetime.utcnow() - active.paused_at).total_seconds()
     active.paused_at = None
+    db.commit(); db.refresh(active)
+    return active
+
+@app.post("/api/timer/deduct", response_model=TimeEntryOut)
+def deduct_timer(body: TimerDeduct, db: Session = Depends(get_db)):
+    """Zieht nachträglich Sekunden ab (z.B. erkannte Inaktivität) — wie ein rückwirkendes Pause/Resume, ohne den laufenden Timer zu unterbrechen."""
+    active = db.query(TimeEntry).filter(TimeEntry.end_time == None).first()
+    if not active:
+        raise HTTPException(404, "Kein aktiver Timer")
+    if active.paused_at is not None:
+        raise HTTPException(400, "Timer ist pausiert")
+    running_seconds = (datetime.utcnow() - active.start_time).total_seconds() - active.paused_seconds
+    active.paused_seconds += max(0, min(body.seconds, running_seconds))
     db.commit(); db.refresh(active)
     return active
 

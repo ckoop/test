@@ -11,7 +11,7 @@ dayjs.locale('de')
 
 const MOODS    = ['😞', '😕', '😐', '🙂', '😄']
 
-export default function TimerPage({ activeTimer, setActiveTimer, pomodoro }) {
+export default function TimerPage({ activeTimer, setActiveTimer, pomodoro, pip }) {
   const [project, setProject]       = useState('Allgemein')
   const [description, setDescription] = useState('')
   const [loading, setLoading]       = useState(false)
@@ -113,9 +113,9 @@ export default function TimerPage({ activeTimer, setActiveTimer, pomodoro }) {
       {/* Timer card */}
       <div className="card" style={{ marginBottom: 12, borderColor: (activeTimer || pomodoroActive) ? 'rgba(200,240,96,.25)' : 'var(--border)' }}>
         {pomodoroActive ? (
-          <PomodoroCard pomodoro={pomodoro} />
+          <PomodoroCard pomodoro={pomodoro} pip={pip} />
         ) : activeTimer ? (
-          <RunningTimer activeTimer={activeTimer} elapsed={elapsed} isPaused={isPaused} onStop={handleStop} onPause={handlePause} onResume={handleResume} loading={loading} />
+          <RunningTimer activeTimer={activeTimer} elapsed={elapsed} isPaused={isPaused} onStop={handleStop} onPause={handlePause} onResume={handleResume} loading={loading} pip={pip} />
         ) : (
           <StartTimer project={project} setProject={setProject} description={description} setDescription={setDescription} onStart={handleStart} loading={loading} projectNames={projectNames} pomodoroEnabled={pomodoroEnabled} onStartPomodoro={() => pomodoro.start({ project, description: description || undefined }).then(() => setDescription(''))} />
         )}
@@ -172,7 +172,7 @@ export default function TimerPage({ activeTimer, setActiveTimer, pomodoro }) {
   )
 }
 
-function RunningTimer({ activeTimer, elapsed, isPaused, onStop, onPause, onResume, loading }) {
+function RunningTimer({ activeTimer, elapsed, isPaused, onStop, onPause, onResume, loading, pip }) {
   const color = isPaused ? 'var(--amber)' : 'var(--accent)'
   return (
     <div>
@@ -180,6 +180,7 @@ function RunningTimer({ activeTimer, elapsed, isPaused, onStop, onPause, onResum
         {isPaused ? <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--amber)', flexShrink: 0 }} /> : <span className="pulse" />}
         <span className="mono" style={{ fontSize: 10, color, textTransform: 'uppercase', letterSpacing: '.1em' }}>{isPaused ? 'Pausiert' : 'Läuft'}</span>
         <span style={{ marginLeft: 'auto' }} className="tag tag-g">{activeTimer.project}</span>
+        <PipButton pip={pip} />
       </div>
       <div className="mono" style={{ fontSize: 50, fontWeight: 300, color, letterSpacing: '-.02em', lineHeight: 1, marginBottom: 6 }}>
         {fmtDuration(elapsed)}
@@ -222,8 +223,17 @@ function StartTimer({ project, setProject, description, setDescription, onStart,
   )
 }
 
+function PipButton({ pip }) {
+  if (!pip?.supported) return null
+  return (
+    <button className="btn-icon" onClick={pip.toggle} title={pip.pipWindow ? 'Schwebendes Fenster schließen' : 'In schwebendem Fenster anzeigen'}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2"/><rect x="12" y="12" width="8" height="6" rx="1" fill="currentColor" stroke="none"/></svg>
+    </button>
+  )
+}
+
 // ── Pomodoro Card ──────────────────────────────────────────────────────────────
-function PomodoroCard({ pomodoro }) {
+function PomodoroCard({ pomodoro, pip }) {
   const { state, settings, remainingMs, skip, continueSession, stop } = pomodoro
   const [loading, setLoading] = useState(false)
   const phase = state.phase
@@ -240,7 +250,10 @@ function PomodoroCard({ pomodoro }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
         {state.awaiting_confirmation ? <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--amber)', flexShrink: 0 }} /> : <span className="pulse" />}
         <span className="mono" style={{ fontSize: 10, color, textTransform: 'uppercase', letterSpacing: '.1em' }}>🍅 {label}</span>
-        {state.project && <span style={{ marginLeft: 'auto' }} className="tag tag-g">{state.project}</span>}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {state.project && <span className="tag tag-g">{state.project}</span>}
+          <PipButton pip={pip} />
+        </div>
       </div>
 
       {state.awaiting_confirmation ? (

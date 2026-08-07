@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
 import { useProjects, invalidateProjects } from '../hooks/useProjects'
+import { useIdleThresholdMinutes, setIdleThresholdMinutes } from '../hooks/useIdleDetection'
 
 const PRESET_COLORS = [
   '#c8f060', '#6699ff', '#ffaa00', '#ff4444',
@@ -72,6 +73,7 @@ export default function SettingsPage() {
       )}
 
       <PomodoroSettingsCard />
+      <IdleSettingsCard />
 
       {/* ── New project ── */}
       <div className="card" style={{ marginBottom: 16 }}>
@@ -186,7 +188,6 @@ export default function SettingsPage() {
 function PomodoroSettingsCard() {
   const [settings, setSettings] = useState(null)
   const [saving, setSaving]     = useState(false)
-  const [saved, setSaved]       = useState(false)
   const [error, setError]       = useState(null)
 
   useEffect(() => { api.getPomodoroSettings().then(setSettings).catch(e => setError(e.message)) }, [])
@@ -197,13 +198,11 @@ function PomodoroSettingsCard() {
     setSaving(true); setError(null)
     try {
       const updated = await api.updatePomodoroSettings(settings)
-      setSettings(updated)
       if (updated.notifications_enabled && 'Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission()
       }
-      setSaved(true); setTimeout(() => setSaved(false), 2500)
-    } catch (e) { setError(e.message) }
-    finally { setSaving(false) }
+      window.location.href = '/'   // zurück zur Timer-Seite + Reload, damit der App-weite Pomodoro-State neu geladen wird
+    } catch (e) { setError(e.message); setSaving(false) }
   }
 
   if (!settings) return null
@@ -236,7 +235,34 @@ function PomodoroSettingsCard() {
         </div>
       )}
       <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-        {saving ? '…' : saved ? '✓ Gespeichert' : '✓ Speichern'}
+        {saving ? '…' : '✓ Speichern'}
+      </button>
+    </div>
+  )
+}
+
+function IdleSettingsCard() {
+  const current = useIdleThresholdMinutes()
+  const [draft, setDraft] = useState(current)
+
+  useEffect(() => { setDraft(current) }, [current])
+
+  const handleSave = () => {
+    setIdleThresholdMinutes(draft)
+    window.location.href = '/'   // zurück zur Timer-Seite + Reload
+  }
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="label" style={{ marginBottom: 12 }}>⏱ Idle-Erkennung</div>
+      <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 14 }}>
+        Ab dieser Inaktivität (Rechner gesperrt, Tab/App im Hintergrund) wird beim Zurückkommen angeboten, die Zeit vom laufenden Timer abzuziehen. Gilt nur für dieses Gerät.
+      </div>
+      <div style={{ marginBottom: 14, maxWidth: 160 }}>
+        <NumberField label="Schwelle (Min)" value={draft} onChange={setDraft} />
+      </div>
+      <button className="btn btn-primary" onClick={handleSave} disabled={draft === current}>
+        ✓ Speichern
       </button>
     </div>
   )
@@ -246,7 +272,18 @@ function NumberField({ label, value, onChange }) {
   return (
     <div>
       <div className="label" style={{ marginBottom: 5, fontSize: 9 }}>{label}</div>
-      <input type="number" min={1} value={value} onChange={e => onChange(Math.max(1, parseInt(e.target.value) || 1))} />
+      <input
+        type="number"
+        min={1}
+        value={value}
+        onChange={e => {
+          const raw = e.target.value
+          if (raw === '') { onChange(''); return }   // Feld darf beim Tippen kurz leer sein
+          const n = parseInt(raw, 10)
+          if (!Number.isNaN(n)) onChange(Math.max(1, n))
+        }}
+        onBlur={e => { if (e.target.value === '') onChange(1) }}
+      />
     </div>
   )
 }

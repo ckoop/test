@@ -19,6 +19,7 @@ export const api = {
   stopTimer:  () => req('/timer/stop', { method: 'POST' }),
   pauseTimer: () => req('/timer/pause', { method: 'POST' }),
   resumeTimer: () => req('/timer/resume', { method: 'POST' }),
+  deductTimer: (seconds) => req('/timer/deduct', { method: 'POST', body: JSON.stringify({ seconds }) }),
   getActive:  () => req('/timer/active'),
 
   // Entries
