@@ -630,6 +630,13 @@ docker compose down && docker compose up --build
 ### Polling-Intervall ändern
 `.env`: `IMAP_POLL_INTERVAL=60` → `docker compose restart backend`
 
+### Branch-Badge in der Sidebar
+Bei einem Build von einem anderen Branch als `main` zeigt die Sidebar unter der Versionsnummer ein Amber-Badge mit dem Branch-Namen (⎇), damit lokale Test-/Feature-Builds nicht mit `main` verwechselt werden. Wird per `git rev-parse --abbrev-ref HEAD` in `vite.config.js` zur Build-Zeit ermittelt (`__GIT_BRANCH__`) — Docker-Build hat kein `.git` im Build-Context (`context: ./frontend`), daher dort Fallback auf `VITE_GIT_BRANCH` (gesetzt via Dockerfile `ARG GIT_BRANCH`, Default `main`). Für sichtbares Badge im Docker-Build explizit mitgeben:
+```bash
+GIT_BRANCH=$(git branch --show-current) docker compose up --build frontend
+```
+`npm run dev`/`vite build` außerhalb Docker erkennen den Branch automatisch, kein Env-Var nötig.
+
 ### Backup
 ```bash
 docker run --rm \
@@ -673,5 +680,6 @@ cd frontend && npm install && npm run dev
 | v4.5    | Idle-Erkennung: Schwelle in den Settings konfigurierbar (`IdleSettingsCard`) — pro Gerät via localStorage (`useIdleThresholdMinutes()`/`setIdleThresholdMinutes()`), bewusst nicht server-synced |
 | v4.6    | `NumberField` (Settings) ließ sich nicht unter 10 leeren/eintippen — Fallback `parseInt('') \|\| 1` schrieb bei jedem Löschen sofort wieder eine „1" rein, gefixt via erlaubtem leerem Zwischenzustand + Clamp erst bei `onBlur`. „Speichern" auf Pomodoro-/Idle-Settings-Karte navigiert jetzt per vollem Reload zurück zur Timer-Seite (`window.location.href = '/'`), damit der App-weite Pomodoro-State sofort aktuell ist |
 | v4.8    | Web-Push-Notifications als Mobile-Pendant zum Schwebenden Fenster: erster Service Worker im Projekt (`public/sw.js`), `push_subscriptions`-Tabelle, `/api/push/*`-Endpoints, `_push_loop()` + Sofort-Push bei Pomodoro-Phasenwechsel (`pywebpush`/VAPID), `PushSettingsCard` mit Subscribe-Toggle |
+| v4.9    | Branch-Badge in der Sidebar (⎇, Amber) für Builds abseits von `main` — Branch-Name via `git rev-parse` in `vite.config.js` zur Build-Zeit ermittelt, Docker-Fallback über `VITE_GIT_BRANCH`/Dockerfile-`ARG GIT_BRANCH` |
 
-**Aktuelle Version: v4.8**
+**Aktuelle Version: v4.9**

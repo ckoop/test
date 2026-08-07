@@ -1,5 +1,7 @@
 FROM node:20-alpine AS builder
 WORKDIR /app
+ARG GIT_BRANCH=main
+ENV VITE_GIT_BRANCH=$GIT_BRANCH
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
