@@ -12,10 +12,12 @@ import SettingsPage from './pages/SettingsPage'
 import { api } from './api'
 import { useTimer, fmtDuration } from './hooks/useTimer'
 import { usePomodoro } from './hooks/usePomodoro'
+import { useIdleDetection } from './hooks/useIdleDetection'
+import FloatingWidget, { usePipWidget } from './FloatingWidget'
 
 dayjs.extend(isoWeek)
 
-export const APP_VERSION = 'v4.2'
+export const APP_VERSION = 'v4.6'
 
 const NAV = [
   { to: '/',        label: 'Timer',   Icon: IcoTimer   },
@@ -35,8 +37,24 @@ export default function App() {
   const [imapConfigured, setImapConfigured] = useState(null)
   const pomodoro = usePomodoro()
   const pomodoroActive = !!pomodoro.state?.phase
+  const pip = usePipWidget()
+  const [idleLoading, setIdleLoading] = useState(false)
+  const idle = useIdleDetection(!!activeTimer && !activeTimer.paused_at)
   const navigate = useNavigate()
   const location = useLocation()
+
+  // Schwebendes Fenster automatisch schließen, sobald weder Timer noch Pomodoro laufen
+  useEffect(() => {
+    if (pip.pipWindow && !activeTimer && !pomodoroActive) pip.pipWindow.close()
+  }, [pip.pipWindow, activeTimer, pomodoroActive])
+
+  const handleIdleDeduct = async () => {
+    if (!idle.prompt) return
+    setIdleLoading(true)
+    try { setActiveTimer(await api.deductTimer(idle.prompt.seconds)) }
+    catch { /* Timer inzwischen gestoppt/pausiert — Hinweis einfach verwerfen */ }
+    finally { setIdleLoading(false); idle.dismiss() }
+  }
 
   // Andere Menüpunkte sind gesperrt solange eine Pomodoro-Session läuft — bei
   // direkter URL-Navigation (oder wenn die Session anderswo gestartet wurde) zurück zum Timer.
@@ -86,10 +104,11 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      {idle.prompt && <IdleBanner prompt={idle.prompt} onDeduct={handleIdleDeduct} onDismiss={idle.dismiss} loading={idleLoading} />}
       <Sidebar hasActive={!!activeTimer} isPaused={isPaused} badges={badges} locked={pomodoroActive} />
       <div className="main-area">
         <Routes>
-          <Route path="/"        element={<TimerPage   activeTimer={activeTimer} setActiveTimer={setActiveTimer} pomodoro={pomodoro} />} />
+          <Route path="/"        element={<TimerPage   activeTimer={activeTimer} setActiveTimer={setActiveTimer} pomodoro={pomodoro} pip={pip} />} />
           <Route path="/woche"   element={<WeekPage />} />
           <Route path="/verlauf" element={<HistoryPage projectFilter={historyProject} setProjectFilter={setHistoryProject} />} />
           <Route path="/stats"   element={<StatsPage year={statsYear} month={statsMonth} setYear={setStatsYear} setMonth={setStatsMonth} />} />
@@ -99,6 +118,7 @@ export default function App() {
         </Routes>
       </div>
       <BottomNav hasActive={!!activeTimer} isPaused={isPaused} badges={mobileBadges} locked={pomodoroActive} />
+      <FloatingWidget pipWindow={pip.pipWindow} activeTimer={activeTimer} pomodoro={pomodoro} />
     </div>
   )
 }
@@ -106,6 +126,30 @@ export default function App() {
 function RunningBadge({ activeTimer }) {
   const elapsed = useTimer(activeTimer.start_time, activeTimer.paused_at, activeTimer.paused_seconds)
   return <>{activeTimer.paused_at && '⏸ '}{fmtDuration(elapsed)}</>
+}
+
+function IdleBanner({ prompt, onDeduct, onDismiss, loading }) {
+  const minutes = Math.round(prompt.seconds / 60)
+  const since = new Date(prompt.since).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+  return (
+    <div style={{
+      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 200,
+      display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+      padding: '10px 16px',
+      background: 'var(--amber-dim)', borderBottom: '1px solid rgba(255,170,0,.3)',
+    }}>
+      <span style={{ fontSize: 15, flexShrink: 0 }}>⏱</span>
+      <div style={{ flex: 1, minWidth: 220, fontSize: 12, color: 'var(--text)' }}>
+        Du warst seit {since} Uhr inaktiv (ca. {minutes} Min). Zeit von der laufenden Aufgabe abziehen?
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+        <button className="btn btn-ghost" style={{ justifyContent: 'center' }} onClick={onDismiss} disabled={loading}>Behalten</button>
+        <button className="btn btn-primary" style={{ width: 'auto', padding: '7px 14px' }} onClick={onDeduct} disabled={loading}>
+          {loading ? '…' : `− ${minutes} Min abziehen`}
+        </button>
+      </div>
+    </div>
+  )
 }
 
 function Sidebar({ hasActive, isPaused, badges, locked }) {

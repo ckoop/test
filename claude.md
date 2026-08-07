@@ -85,10 +85,12 @@ timetracker/
         ├── App.jsx                  # Routing + BottomNav (7 Tabs)
         ├── api.js                   # Fetch-Wrapper für alle Endpoints
         ├── index.css                # Design Tokens + globale Styles
+        ├── FloatingWidget.jsx       # Document-Picture-in-Picture-Widget (Timer/Pomodoro, tab-unabhängig)
         ├── hooks/
         │   ├── useTimer.js          # Live-Timer Hook + Format-Helpers + Overtime
         │   ├── useProjects.js       # Shared project list mit Cache + invalidation
-        │   └── usePomodoro.js       # Pomodoro-Polling + Countdown + Sound/Notification
+        │   ├── usePomodoro.js       # Pomodoro-Polling + Countdown + Sound/Notification
+        │   └── useIdleDetection.js  # Erkennt Inaktivität via visibilitychange, liefert Deduct-Prompt, Schwelle pro Gerät konfigurierbar
         └── pages/
             ├── TimerPage.jsx        # Timer + Pomodoro-Card + manuelle Einträge + Tagesnotiz + Report
             ├── WeekPage.jsx         # Wochenübersicht + Balkendiagramm
@@ -96,7 +98,7 @@ timetracker/
             ├── StatsPage.jsx        # Monatsstatistiken + Recharts, Projekt-Filter im Balkendiagramm, Überstunden Pro Tag/Pro Projekt
             ├── MailPage.jsx         # Mail-Status + Report senden + IMAP Poll + Log
             ├── ExportPage.jsx       # CSV / JSON Export + Tageszusammenfassung (Text, Vorschau + .txt-Download)
-            ├── SettingsPage.jsx     # Projektverwaltung (neu/umbenennen/Farbe/archiv) + Pomodoro-Einstellungen
+            ├── SettingsPage.jsx     # Projektverwaltung (neu/umbenennen/Farbe/archiv) + Pomodoro- + Idle-Einstellungen
             ├── OvertimeBanner.jsx   # Überstunden-Anzeige (compact + full)
             └── ManualEntryModal.jsx # Shared Modal für manuelle Einträge
 ```
@@ -195,6 +197,7 @@ timetracker/
 | POST   | /api/timer/start   | Body: `{ project, description? }`    |
 | POST   | /api/timer/pause   | Aktiven Timer pausieren               |
 | POST   | /api/timer/resume  | Pausierten Timer fortsetzen           |
+| POST   | /api/timer/deduct  | Body: `{ seconds }`. Zieht nachträglich Sekunden ab (Idle-Erkennung), 400 falls pausiert |
 | POST   | /api/timer/stop    | Aktiven Timer stoppen                |
 | GET    | /api/timer/active  | Aktiven Timer abrufen (oder null)    |
 
@@ -406,6 +409,40 @@ Beispiel (Juli 2026): 11 Tage mit Tages-Überstunden, aber nur `Support` hatte a
 
 ---
 
+## Schwebendes Fenster (Floating Widget) im Detail
+
+Zeigt laufenden Timer bzw. laufende Pomodoro-Session in einem eigenen, immer-im-Vordergrund-Fenster — bleibt sichtbar auch wenn ein anderer Browser-Tab oder ein anderes Programm aktiv ist. Implementiert über die **Document Picture-in-Picture API** (`window.documentPictureInPicture.requestWindow()`), nicht über einen eigenen Prozess — es ist dasselbe Tab/dieselbe JS-Realm, nur mit einem zweiten, always-on-top Browser-Fenster als zusätzlichem Render-Ziel.
+
+**`usePipWidget()` (`FloatingWidget.jsx`)** kapselt Öffnen/Schließen: `open()` muss aus einem echten User-Klick heraus aufgerufen werden (Browser-Vorgabe für PiP), erzeugt darum den `📌`/`🗗`-Button (`PipButton` in `TimerPage.jsx`) direkt in `RunningTimer`/`PomodoroCard`. Der Hook lebt in `App.jsx` (nicht in `TimerPage.jsx`), damit das Fenster beim Wechsel der Route (z.B. während eines normalen, nicht Pomodoro-gebundenen Timers) nicht durch Unmount geschlossen wird.
+
+**Styles werden 1:1 aus dem Haupttab übernommen** (`copyStyles()`): iteriert `document.styleSheets`, hängt für `<link>`-Stylesheets (Google Fonts, Vite-Bundle-CSS) ein neues `<link>` mit derselben `href` ins PiP-`<head>`, für Inline-`<style>`-Tags eine Kopie des `textContent` — dadurch sind CSS-Variablen (`--accent`, `--bg`, …) und Klassen (`.tag`, `.pulse`, `.mono`) im PiP-Dokument identisch verfügbar, ohne `cssRules` cross-origin auslesen zu müssen (würde bei Google Fonts an CORS scheitern).
+
+**Inhalt via `createPortal`:** `<FloatingWidget pipWindow={pip.pipWindow} activeTimer={activeTimer} pomodoro={pomodoro} />` (in `App.jsx`, außerhalb der `<Routes>`) rendert bei offenem PiP-Fenster denselben Timer-/Pomodoro-State per React-Portal in `pipWindow.document.body` — kein separates Polling/Ticking nötig, der Countdown läuft über denselben `useTimer`-Hook wie in der normalen Ansicht.
+
+**Automatisches Schließen:** Ein `useEffect` in `App.jsx` schließt das PiP-Fenster, sobald weder `activeTimer` noch eine Pomodoro-Session mehr aktiv ist (`pip.pipWindow.close()` löst intern das `pagehide`-Event aus, das den Hook-State zurücksetzt).
+
+**Browser-Support:** Document Picture-in-Picture ist aktuell **Desktop-Chromium-only** (Chrome/Edge/Brave ≥ 116 auf Windows/Mac/Linux). Auf Mobil (Android/iOS) fehlt die API in **jedem** Browser, auch in mobilem Chrome/Brave/Edge — Chromium hat sie dort bislang nicht implementiert, unabhängig vom Browser-Anbieter. `PIP_SUPPORTED`-Flag (`'documentPictureInPicture' in window`) blendet den Button entsprechend überall aus, wo die API fehlt (Firefox, Safari, alle mobilen Browser) — kein Fallback nötig, Kernfunktion (Timer starten/stoppen) bleibt unberührt.
+
+---
+
+## Idle-Erkennung im Detail
+
+Erkennt, wenn der Rechner gesperrt oder der Tab/die App längere Zeit im Hintergrund war, während der Timer eigentlich weiterlief, und bietet an, die Zeit nachträglich abzuziehen.
+
+**`useIdleDetection(active)` (`hooks/useIdleDetection.js`)** hört auf `document.visibilitychange` — merkt sich den Zeitpunkt, an dem der Tab `hidden` wird (Rechner gesperrt, Tab-/App-Wechsel funktioniert dafür browserübergreifend zuverlässig, echte OS-Idle-APIs wie die `IdleDetection`-API sind Chromium-only und brauchen eine extra Permission). Wird der Tab wieder `visible`, berechnet der Hook die Lücke; ab der konfigurierten Schwelle (Default 3 Min) und nur falls `active` (= ein Timer lief zu dem Zeitpunkt tatsächlich, nicht pausiert) wahr ist, wird ein `prompt` gesetzt.
+
+**Schwelle konfigurierbar pro Gerät** über `useIdleThresholdMinutes()` / `setIdleThresholdMinutes()` (localStorage-Key `epoch.idleThresholdMinutes`, kein Backend-Feld) — bewusst *nicht* server-synced wie die Pomodoro-Settings, weil die Erkennung selbst pro Gerät läuft (jedes Gerät beobachtet nur seinen eigenen Tab, ein Handy sperrt sich anders/schneller als ein Desktop-Rechner). Änderungen in `SettingsPage.jsx` (`IdleSettingsCard`) feuern ein `epoch:idle-threshold-change`-Custom-Event, damit der bereits gemountete Hook in `App.jsx` die neue Schwelle sofort übernimmt, ohne Reload.
+
+**„Speichern" auf beiden Settings-Karten (Pomodoro + Idle) navigiert per `window.location.href = '/'` zurück zur Timer-Seite und lädt die App dabei komplett neu.** Grund: `usePomodoro()` lebt in `App.jsx` und lädt seine Settings nur einmal beim Mount — ein Save in `PomodoroSettingsCard` (eigener, unabhängiger `api.getPomodoroSettings()`-Call in `SettingsPage.jsx`) würde den App-weiten Pomodoro-State sonst nicht aktualisieren, bis zum nächsten Poll/Fokuswechsel. Der volle Reload ist die pragmatische Lösung dafür, statt eine Callback-Kette durch die Komponenten zu ziehen.
+
+**Gelebt wird der Hook in `App.jsx`** (nicht in `TimerPage.jsx`), aus demselben Grund wie beim PiP-Fenster: er soll auch dann feuern, wenn beim Zurückkommen gerade eine andere Route aktiv ist. `active` wird aus `activeTimer && !activeTimer.paused_at` abgeleitet — das ist dieselbe zugrunde liegende `time_entry`-Zeile, egal ob der normale Timer oder eine Pomodoro-Arbeitsphase lief.
+
+**`IdleBanner`** (in `App.jsx`) erscheint als fixer Balken am oberen Bildschirmrand mit „Du warst seit HH:MM inaktiv (ca. X Min). Zeit abziehen?" + zwei Buttons. „Abziehen" ruft `POST /api/timer/deduct` mit den erkannten Sekunden auf.
+
+**Backend `deduct_timer`** (`main.py`) verhält sich wie ein rückwirkendes Pause/Resume: erhöht `paused_seconds` des aktiven Eintrags direkt, ohne `paused_at` zu setzen — der Timer läuft optisch ununterbrochen weiter, nur die angezeigte/gespeicherte Dauer schrumpft. Gedeckelt auf die tatsächlich verstrichene Laufzeit (`(jetzt - start_time) - paused_seconds`), damit nicht mehr abgezogen werden kann als real vergangen ist. 400 falls der Timer gerade pausiert ist (dann läuft ohnehin schon nichts mit, das abgezogen werden müsste).
+
+---
+
 ## Export: Tageszusammenfassung im Detail
 
 Läuft komplett **client-seitig** in `ExportPage.jsx`, kein eigener Backend-Endpoint (es gab kurzzeitig einen serverseitig aggregierenden `/api/export/summary`, der wurde wieder entfernt — die gewünschte Struktur braucht keine Summierung mehr, siehe unten). Datengrundlage ist das ohnehin vorhandene `GET /api/entries` (gefiltert auf `end_time` gesetzt, also nur abgeschlossene Einträge).
@@ -517,7 +554,32 @@ FROM nginx:alpine                 # nur dist/ + nginx.conf
 - **Zeitzone** — UTC im Backend, Lokalzeit im Browser; bei verschiedenen Zeitzonen möglich falsche Darstellung manueller Einträge
 - **Keine Authentifizierung** — für lokales Netz ausreichend; für Internet: Basic Auth in Nginx empfohlen
 - **PWA ohne Service Worker** — kein Offline-Betrieb
+- **Schwebendes Fenster (Document Picture-in-Picture)** — nur Desktop-Chromium (Chrome/Edge/Brave ≥ 116); auf Mobil (Android/iOS) fehlt die API in allen Browsern, Button dort ausgeblendet
 - **Projekte in Einträgen** — Umbenennen eines Projekts ändert **nicht** die bestehenden Einträge (String-Referenz); bei Umbenennung bleibt der alte Name in historischen Einträgen erhalten
+- **Idle-Erkennung** — basiert auf `visibilitychange`, nicht auf echter Maus-/Tastatur-Inaktivität; erkennt zuverlässig Rechner sperren/Tab wechseln, aber nicht "Tab bleibt offen sichtbar, aber Nutzer ist einfach weg" (z.B. Bildschirm bleibt an); Schwelle ist in den Settings konfigurierbar, aber **pro Gerät** (localStorage) — synct nicht zwischen Geräten wie die Pomodoro-Settings
+
+---
+
+## TODO / Geplante Features
+
+### Mobiles Pendant zum Schwebenden Fenster (Web-Push-Notification)
+
+Document Picture-in-Picture (siehe „Schwebendes Fenster (Floating Widget) im Detail" oben) ist Desktop-only — auf dem Handy (Android/iOS) fehlt die API komplett. Geplanter Ersatz: eine sich periodisch aktualisierende **Push-Notification** mit laufender Timer-/Pomodoro-Zeit, solange eine Session aktiv ist. Kein echtes "sticky/ongoing" Notification wie bei nativen Apps möglich (Nutzer kann sie wegwischen, sie kommt erst beim nächsten Update-Zyklus wieder) — aber der beste erreichbare Kompromiss auf Mobil-Web.
+
+**Schritte:**
+1. VAPID-Schlüsselpaar generieren (einmalig)
+2. Backend: Tabelle `push_subscriptions` (endpoint, keys, angelegt am) + `POST /api/push/subscribe` / `/unsubscribe`
+3. Backend: `_push_loop()` — Hintergrund-Task analog zu `_pomodoro_loop()`, sendet Update alle ~3–5 Min (statt sekündlich, wegen Akku/Traffic) an alle Subscriptions solange Timer/Pomodoro aktiv, per `pywebpush`; ersetzt Notification via festem `tag` statt zu stapeln; zusätzlich sofortiges Update bei Pomodoro-Phasenwechsel
+4. Frontend: erster Service Worker im Projekt (`public/sw.js`) — `push`-Event → `registration.showNotification()`, `notificationclick` → App öffnen
+5. Frontend: Subscribe-Flow (Permission anfragen, `pushManager.subscribe()`, Subscription ans Backend senden), Settings-Toggle „Push bei laufendem Timer"
+6. Testing auf echtem Handy (Push lässt sich in Chrome-Devtools nicht zuverlässig simulieren)
+
+**Aufwand:** ~1–1,5 Tage fokussierte Arbeit.
+
+**Zu beachten:**
+- Führt den **ersten Service Worker** im Projekt ein — bricht mit der bisherigen bewussten Einschränkung „PWA ohne Service Worker" (s. o.); architektonischer Schritt, nicht nur ein Feature-Häkchen
+- **HTTPS Pflicht** für Service Worker + Push (außer `localhost`) — Voraussetzung ist der geplante Let's-Encrypt-Rollout
+- iOS nur wenn PWA per „Zum Home-Bildschirm hinzufügen" installiert ist, iOS ≥ 16.4, stärker eingeschränkt als Android
 
 ---
 
@@ -571,5 +633,9 @@ cd frontend && npm install && npm run dev
 | v4.0    | Pomodoro-Timer: treibt den echten Zeiterfassungs-Timer (auto Pause/Resume via `paused_at`/`paused_seconds`), konfigurierbar in den Settings (Dauern, Zyklen, Auto-Start, Ton, Notifications), serverseitiger Hintergrund-Tick für Phasenwechsel, `PomodoroCard` auf der Timer-Seite |
 | v4.1    | Pomodoro: Master-Schalter zum kompletten Deaktivieren (Frontend + Backend-Guard), Navigation zu anderen Menüpunkten während aktiver Session gesperrt (`usePomodoro()` dafür nach `App.jsx` gehoben), SVG-Favicon im Epoch-Uhr-Design |
 | v4.2    | Export: Tageszusammenfassung als Text — pro Tag und Projekt, Tätigkeiten chronologisch und unaggregiert mit Dauer in Stunden (z.B. „Support – Daily Standup (0.5h), Abstimmung intern (1h)"), Vorschau (kopierbar) + .txt-Download auf der Export-Seite |
+| v4.3    | Schwebendes Fenster für Timer/Pomodoro via Document Picture-in-Picture API (`FloatingWidget.jsx`, `usePipWidget()`) — bleibt sichtbar unabhängig vom aktiven Browser-Tab, übernimmt App-Styles automatisch, schließt sich selbst sobald kein Timer mehr läuft, Chromium-only |
+| v4.4    | Idle-Erkennung: `useIdleDetection()` erkennt via `visibilitychange`, wenn der Rechner gesperrt/Tab länger inaktiv war während der Timer lief (≥3 Min), `IdleBanner` bietet nachträglichen Abzug an, neuer Endpoint `POST /api/timer/deduct` (rückwirkendes Pause/Resume ohne Unterbrechung, gedeckelt auf tatsächlich verstrichene Zeit) |
+| v4.5    | Idle-Erkennung: Schwelle in den Settings konfigurierbar (`IdleSettingsCard`) — pro Gerät via localStorage (`useIdleThresholdMinutes()`/`setIdleThresholdMinutes()`), bewusst nicht server-synced |
+| v4.6    | `NumberField` (Settings) ließ sich nicht unter 10 leeren/eintippen — Fallback `parseInt('') \|\| 1` schrieb bei jedem Löschen sofort wieder eine „1" rein, gefixt via erlaubtem leerem Zwischenzustand + Clamp erst bei `onBlur`. „Speichern" auf Pomodoro-/Idle-Settings-Karte navigiert jetzt per vollem Reload zurück zur Timer-Seite (`window.location.href = '/'`), damit der App-weite Pomodoro-State sofort aktuell ist |
 
-**Aktuelle Version: v4.2**
+**Aktuelle Version: v4.6**
