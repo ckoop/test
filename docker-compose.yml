@@ -43,6 +43,8 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        GIT_BRANCH: ${GIT_BRANCH:-main}
     container_name: timetracker-frontend
     restart: unless-stopped
     ports:
