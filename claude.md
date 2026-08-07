@@ -581,6 +581,23 @@ Document Picture-in-Picture (siehe „Schwebendes Fenster (Floating Widget) im D
 - **HTTPS Pflicht** für Service Worker + Push (außer `localhost`) — Voraussetzung ist der geplante Let's-Encrypt-Rollout
 - iOS nur wenn PWA per „Zum Home-Bildschirm hinzufügen" installiert ist, iOS ≥ 16.4, stärker eingeschränkt als Android
 
+### Backup-Lösung für SQLite-Volume
+
+Aktuell kein automatisiertes Backup — die DB liegt ausschließlich im Docker-Volume `timetracker-data` (lokal auf dem Host, s. Architektur oben), ein Datenverlust bei Volume-Löschung/Host-Crash wäre nicht wiederherstellbar.
+
+**Schritte:**
+1. Backup-Skript (`backup.sh`): Hilfscontainer mountet Volume + Zielverzeichnis, packt `timetracker.db` als `tar.gz` mit Datumsstempel
+2. Vor dem Backup Backend kurz stoppen (`docker compose stop backend`) für konsistenten Snapshot, danach wieder starten — Alternative `docker cp` aus laufendem Container ist einfacher, aber nicht garantiert konsistent
+3. Rotation/Aufbewahrung klären (z. B. letzte 7 Tage + letzte 4 Wochen behalten, ältere löschen)
+4. Ablagespeicherort für Backups festlegen (externe Platte, NAS, Cloud-Storage?) — noch offen
+5. Automatisierung per Cron auf dem Host, der `docker compose` ausführt
+
+**Aufwand:** ~1–2 Stunden für Skript + Cron, je nach gewähltem Ablageort ggf. mehr.
+
+**Zu beachten:**
+- Skript muss außerhalb des Repos/Containers laufen (Host-Cron), da es auf den Docker-Socket/Volume-Mount zugreift
+- Restore-Vorgang einmal testen, nicht nur Backup — sonst unklar ob Dump im Ernstfall wirklich nutzbar ist
+
 ---
 
 ## Häufige Aufgaben
