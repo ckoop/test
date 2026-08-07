@@ -182,6 +182,15 @@ timetracker/
 | detail     | Text     | z.B. „2 Einträge erstellt" oder Fehlermeldung       |
 | created_at | DateTime | Auto                                                |
 
+### `push_subscriptions`
+| Spalte     | Typ      | Beschreibung                                        |
+|------------|----------|-----------------------------------------------------|
+| id         | Integer  | Primary Key                                         |
+| endpoint   | String   | Push-Endpoint-URL des Browsers, unique              |
+| p256dh     | String   | Public Key der Subscription (Verschlüsselung)       |
+| auth       | String   | Auth-Secret der Subscription                        |
+| created_at | DateTime | Auto                                                |
+
 ---
 
 ## API Endpoints
@@ -262,6 +271,13 @@ timetracker/
 | POST   | /api/pomodoro/continue  | Nur bei `awaiting_confirmation` — startet die bereits gesetzte nächste Phase |
 | POST   | /api/pomodoro/stop      | Session abbrechen, zugehörigen `time_entry` sauber abschließen       |
 
+### Push
+| Method | Path                    | Beschreibung                                                          |
+|--------|-------------------------|-------------------------------------------------------------------------|
+| GET    | /api/push/public-key    | VAPID Public Key (für `pushManager.subscribe()`)                     |
+| POST   | /api/push/subscribe     | Body: `{ endpoint, keys: { p256dh, auth } }` — Upsert per `endpoint`  |
+| POST   | /api/push/unsubscribe   | Body: `{ endpoint }`                                                  |
+
 ---
 
 ## Umgebungsvariablen (`.env`)
@@ -283,9 +299,14 @@ IMAP_USER=epoch@example.com
 IMAP_PASSWORD=secret
 IMAP_FOLDER=INBOX
 IMAP_POLL_INTERVAL=300     # Sekunden (Standard: 5 Min)
+
+# Web Push (VAPID) – Push-Benachrichtigungen bei laufendem Timer/Pomodoro
+VAPID_PUBLIC_KEY=...
+VAPID_PRIVATE_KEY=...
+VAPID_CLAIM_EMAIL=du@example.com   # für den mailto:-Claim gegenüber dem Push-Dienst
 ```
 
-Alle Variablen optional — fehlen Credentials, ist Mail deaktiviert.
+Alle Variablen optional — fehlen Credentials, ist Mail bzw. Push deaktiviert. VAPID-Schlüsselpaar einmalig generieren (z.B. via `py_vapid`, das mit `pywebpush` installiert wird) und lokal in `.env` eintragen.
 
 ---
 
@@ -443,6 +464,22 @@ Erkennt, wenn der Rechner gesperrt oder der Tab/die App längere Zeit im Hinterg
 
 ---
 
+## Push-Benachrichtigungen im Detail
+
+Mobiles Pendant zum Schwebenden Fenster (siehe oben) — Document Picture-in-Picture ist Desktop-only, auf dem Handy übernimmt eine **Web-Push-Notification** die laufende Timer-/Pomodoro-Anzeige, solange eine Session aktiv ist. Kein echtes "sticky/ongoing" Notification wie bei nativen Apps möglich (Nutzer kann sie wegwischen, sie kommt erst beim nächsten Update-Zyklus wieder) — aber der beste erreichbare Kompromiss auf Mobil-Web. Führt den **ersten Service Worker** im Projekt ein (`public/sw.js`) — bricht mit der bisherigen bewussten Einschränkung „PWA ohne Service Worker".
+
+**Subscription-Flow:** `usePushSubscription()` (`hooks/usePushSubscription.js`) fragt Notification-Permission an, holt den VAPID Public Key von `GET /api/push/public-key`, ruft `registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey })` auf und schickt die Subscription (`endpoint`, `keys.p256dh`, `keys.auth`) an `POST /api/push/subscribe` — Upsert per `endpoint` in `push_subscriptions`. Toggle „Push bei laufendem Timer" in `PushSettingsCard` (`SettingsPage.jsx`), pro Gerät (jede Browser-Subscription ist geräte-/browserspezifisch, kein globaler Schalter).
+
+**Versand (`main.py`):** `_send_push_to_all()` verschickt per `pywebpush`/VAPID an alle gespeicherten Subscriptions; entfernt dabei automatisch abgelaufene/widerrufene Subscriptions (HTTP 404/410 von der Push-Service-Antwort). Zwei Auslöser:
+1. **`_push_loop()`** — Hintergrund-Task analog `_pomodoro_loop()`/`_imap_loop()`, prüft alle 20s, sendet aber nur alle `PUSH_INTERVAL_SECONDS` (~4 Min, wegen Akku/Traffic) solange ein Timer läuft (nicht pausiert) oder eine Pomodoro-Phase aktiv ist.
+2. **Sofort bei Pomodoro-Phasenwechsel** — Aufruf direkt in `_advance_pomodoro_phase()`, analog zur lokalen Browser-Notification in `usePomodoro.js`, aber serverseitig (funktioniert auch wenn die App im Hintergrund/geschlossen ist).
+
+**Service Worker (`public/sw.js`):** `push`-Event parst das JSON-Payload (`{title, body}`) und zeigt es via `registration.showNotification()` mit festem `tag: 'epoch-timer'` — ersetzt die vorherige Notification statt zu stapeln. `notificationclick` fokussiert ein offenes Fenster oder öffnet die App neu.
+
+**HTTPS Pflicht** für Service Worker + Push (außer `localhost`, gilt als sicherer Kontext) — echtes Push-Testing auf einem Handy ist daher erst nach dem Let's-Encrypt-Rollout möglich (separates TODO, siehe Backup-Punkt unten). iOS nur wenn die PWA per „Zum Home-Bildschirm hinzufügen" installiert ist, iOS ≥ 16.4, stärker eingeschränkt als Android.
+
+---
+
 ## Export: Tageszusammenfassung im Detail
 
 Läuft komplett **client-seitig** in `ExportPage.jsx`, kein eigener Backend-Endpoint (es gab kurzzeitig einen serverseitig aggregierenden `/api/export/summary`, der wurde wieder entfernt — die gewünschte Struktur braucht keine Summierung mehr, siehe unten). Datengrundlage ist das ohnehin vorhandene `GET /api/entries` (gefiltert auf `end_time` gesetzt, also nur abgeschlossene Einträge).
@@ -562,25 +599,6 @@ FROM nginx:alpine                 # nur dist/ + nginx.conf
 
 ## TODO / Geplante Features
 
-### Mobiles Pendant zum Schwebenden Fenster (Web-Push-Notification)
-
-Document Picture-in-Picture (siehe „Schwebendes Fenster (Floating Widget) im Detail" oben) ist Desktop-only — auf dem Handy (Android/iOS) fehlt die API komplett. Geplanter Ersatz: eine sich periodisch aktualisierende **Push-Notification** mit laufender Timer-/Pomodoro-Zeit, solange eine Session aktiv ist. Kein echtes "sticky/ongoing" Notification wie bei nativen Apps möglich (Nutzer kann sie wegwischen, sie kommt erst beim nächsten Update-Zyklus wieder) — aber der beste erreichbare Kompromiss auf Mobil-Web.
-
-**Schritte:**
-1. VAPID-Schlüsselpaar generieren (einmalig)
-2. Backend: Tabelle `push_subscriptions` (endpoint, keys, angelegt am) + `POST /api/push/subscribe` / `/unsubscribe`
-3. Backend: `_push_loop()` — Hintergrund-Task analog zu `_pomodoro_loop()`, sendet Update alle ~3–5 Min (statt sekündlich, wegen Akku/Traffic) an alle Subscriptions solange Timer/Pomodoro aktiv, per `pywebpush`; ersetzt Notification via festem `tag` statt zu stapeln; zusätzlich sofortiges Update bei Pomodoro-Phasenwechsel
-4. Frontend: erster Service Worker im Projekt (`public/sw.js`) — `push`-Event → `registration.showNotification()`, `notificationclick` → App öffnen
-5. Frontend: Subscribe-Flow (Permission anfragen, `pushManager.subscribe()`, Subscription ans Backend senden), Settings-Toggle „Push bei laufendem Timer"
-6. Testing auf echtem Handy (Push lässt sich in Chrome-Devtools nicht zuverlässig simulieren)
-
-**Aufwand:** ~1–1,5 Tage fokussierte Arbeit.
-
-**Zu beachten:**
-- Führt den **ersten Service Worker** im Projekt ein — bricht mit der bisherigen bewussten Einschränkung „PWA ohne Service Worker" (s. o.); architektonischer Schritt, nicht nur ein Feature-Häkchen
-- **HTTPS Pflicht** für Service Worker + Push (außer `localhost`) — Voraussetzung ist der geplante Let's-Encrypt-Rollout
-- iOS nur wenn PWA per „Zum Home-Bildschirm hinzufügen" installiert ist, iOS ≥ 16.4, stärker eingeschränkt als Android
-
 ### Backup-Lösung für SQLite-Volume
 
 Aktuell kein automatisiertes Backup — die DB liegt ausschließlich im Docker-Volume `timetracker-data` (lokal auf dem Host, s. Architektur oben), ein Datenverlust bei Volume-Löschung/Host-Crash wäre nicht wiederherstellbar.
@@ -654,5 +672,6 @@ cd frontend && npm install && npm run dev
 | v4.4    | Idle-Erkennung: `useIdleDetection()` erkennt via `visibilitychange`, wenn der Rechner gesperrt/Tab länger inaktiv war während der Timer lief (≥3 Min), `IdleBanner` bietet nachträglichen Abzug an, neuer Endpoint `POST /api/timer/deduct` (rückwirkendes Pause/Resume ohne Unterbrechung, gedeckelt auf tatsächlich verstrichene Zeit) |
 | v4.5    | Idle-Erkennung: Schwelle in den Settings konfigurierbar (`IdleSettingsCard`) — pro Gerät via localStorage (`useIdleThresholdMinutes()`/`setIdleThresholdMinutes()`), bewusst nicht server-synced |
 | v4.6    | `NumberField` (Settings) ließ sich nicht unter 10 leeren/eintippen — Fallback `parseInt('') \|\| 1` schrieb bei jedem Löschen sofort wieder eine „1" rein, gefixt via erlaubtem leerem Zwischenzustand + Clamp erst bei `onBlur`. „Speichern" auf Pomodoro-/Idle-Settings-Karte navigiert jetzt per vollem Reload zurück zur Timer-Seite (`window.location.href = '/'`), damit der App-weite Pomodoro-State sofort aktuell ist |
+| v4.8    | Web-Push-Notifications als Mobile-Pendant zum Schwebenden Fenster: erster Service Worker im Projekt (`public/sw.js`), `push_subscriptions`-Tabelle, `/api/push/*`-Endpoints, `_push_loop()` + Sofort-Push bei Pomodoro-Phasenwechsel (`pywebpush`/VAPID), `PushSettingsCard` mit Subscribe-Toggle |
 
-**Aktuelle Version: v4.6**
+**Aktuelle Version: v4.8**

@@ -60,4 +60,9 @@ export const api = {
   skipPomodoro:           () => req('/pomodoro/skip', { method: 'POST' }),
   continuePomodoro:       () => req('/pomodoro/continue', { method: 'POST' }),
   stopPomodoro:           () => req('/pomodoro/stop', { method: 'POST' }),
+
+  // Push
+  getPushPublicKey: () => req('/push/public-key'),
+  subscribePush:    (sub) => req('/push/subscribe', { method: 'POST', body: JSON.stringify(sub) }),
+  unsubscribePush:  (endpoint) => req('/push/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint }) }),
 }
