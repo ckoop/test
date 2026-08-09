@@ -17,7 +17,7 @@ import FloatingWidget, { usePipWidget } from './FloatingWidget'
 
 dayjs.extend(isoWeek)
 
-export const APP_VERSION = 'v4.7'
+export const APP_VERSION = 'v4.8'
 
 const NAV = [
   { to: '/',        label: 'Timer',   Icon: IcoTimer   },
@@ -176,7 +176,7 @@ function Sidebar({ hasActive, isPaused, badges, locked }) {
                     {to === '/' && hasActive && <span className={'sidebar-live-dot' + (isPaused ? ' paused' : '')} />}
                   </span>
                   {label}
-                  {isLocked ? <span className="sidebar-badge">🔒</span> : badges[to] && <span className="sidebar-badge">{badges[to]}</span>}
+                  {!isLocked && badges[to] && <span className="sidebar-badge">{badges[to]}</span>}
                 </>
               )}
             </NavLink>
@@ -225,9 +225,7 @@ function BottomNav({ hasActive, isPaused, badges, locked }) {
                   )}
                 </span>
                 {label}
-                {isLocked ? (
-                  <span style={{ fontSize: 8 }}>🔒</span>
-                ) : badges?.[to] && (
+                {!isLocked && badges?.[to] && (
                   <span style={{
                     fontFamily: 'var(--mono)', fontSize: 7, fontWeight: 400,
                     textTransform: 'none', letterSpacing: 0,
