@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
 
   # ── Backend (FastAPI) ────────────────────────────────────────────────────────
@@ -9,7 +7,7 @@ services:
     container_name: timetracker-backend
     restart: unless-stopped
     volumes:
-      - timetracker-data:/data
+      - /home/christian/claude/data:/data
     environment:
       - DATABASE_URL=sqlite:////data/timetracker.db
       # ── SMTP (ausgehende E-Mails) ──────────────────────────────────────────
@@ -47,9 +45,6 @@ services:
       - backend
     networks:
       - app
-
-volumes:
-  timetracker-data:
 
 networks:
   app:

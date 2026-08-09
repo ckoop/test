@@ -33,13 +33,13 @@ Browser / Handy (PWA)
         ├── /api/*  ──► FastAPI :8000  (Container "backend")
         │                    │
         │               SQLite /data/timetracker.db
-        │               (persistiert via Docker Volume)
+        │               (persistiert via Bind-Mount /home/christian/claude/data)
         │               + asyncio IMAP-Polling Background Task
         │
         └── /*      ──► React SPA (statische Build-Dateien)
 ```
 
-**Zwei Container, ein Docker Volume:**
+**Zwei Container, ein Bind-Mount (kein Docker-Volume):**
 - `timetracker-frontend` — Nginx: `/api/*` proxy zum Backend + React SPA static files
 - `timetracker-backend` — FastAPI + SQLAlchemy + IMAP-Background-Task
 
@@ -581,21 +581,20 @@ Document Picture-in-Picture (siehe „Schwebendes Fenster (Floating Widget) im D
 - **HTTPS Pflicht** für Service Worker + Push (außer `localhost`) — Voraussetzung ist der geplante Let's-Encrypt-Rollout
 - iOS nur wenn PWA per „Zum Home-Bildschirm hinzufügen" installiert ist, iOS ≥ 16.4, stärker eingeschränkt als Android
 
-### Backup-Lösung für SQLite-Volume
+### Backup-Lösung für SQLite-Datenverzeichnis
 
-Aktuell kein automatisiertes Backup — die DB liegt ausschließlich im Docker-Volume `timetracker-data` (lokal auf dem Host, s. Architektur oben), ein Datenverlust bei Volume-Löschung/Host-Crash wäre nicht wiederherstellbar.
+Aktuell kein automatisiertes Backup — die DB liegt als Bind-Mount unter `/home/christian/claude/data/timetracker.db` auf dem Host (kein Docker-Volume mehr, s. Architektur oben), ein Datenverlust bei versehentlichem Löschen/Host-Crash wäre nicht wiederherstellbar.
 
 **Schritte:**
-1. Backup-Skript (`backup.sh`): Hilfscontainer mountet Volume + Zielverzeichnis, packt `timetracker.db` als `tar.gz` mit Datumsstempel
-2. Vor dem Backup Backend kurz stoppen (`docker compose stop backend`) für konsistenten Snapshot, danach wieder starten — Alternative `docker cp` aus laufendem Container ist einfacher, aber nicht garantiert konsistent
+1. Backup-Skript (`backup.sh`): packt `/home/christian/claude/data/timetracker.db` direkt als `tar.gz` mit Datumsstempel — kein Hilfscontainer mehr nötig, da normaler Host-Pfad
+2. Vor dem Backup Backend kurz stoppen (`docker compose stop backend`) für konsistenten Snapshot, danach wieder starten — Alternative `cp` bei laufendem Container ist einfacher, aber nicht garantiert konsistent
 3. Rotation/Aufbewahrung klären (z. B. letzte 7 Tage + letzte 4 Wochen behalten, ältere löschen)
 4. Ablagespeicherort für Backups festlegen (externe Platte, NAS, Cloud-Storage?) — noch offen
-5. Automatisierung per Cron auf dem Host, der `docker compose` ausführt
+5. Automatisierung per Cron auf dem Host
 
-**Aufwand:** ~1–2 Stunden für Skript + Cron, je nach gewähltem Ablageort ggf. mehr.
+**Aufwand:** ~1 Stunde für Skript + Cron, je nach gewähltem Ablageort ggf. mehr.
 
 **Zu beachten:**
-- Skript muss außerhalb des Repos/Containers laufen (Host-Cron), da es auf den Docker-Socket/Volume-Mount zugreift
 - Restore-Vorgang einmal testen, nicht nur Backup — sonst unklar ob Dump im Ernstfall wirklich nutzbar ist
 
 ---
@@ -614,10 +613,7 @@ docker compose down && docker compose up --build
 
 ### Backup
 ```bash
-docker run --rm \
-  -v timetracker_timetracker-data:/data \
-  -v $(pwd):/backup alpine \
-  tar czf /backup/backup-$(date +%Y%m%d).tar.gz -C /data .
+tar czf backup-$(date +%Y%m%d).tar.gz -C /home/christian/claude/data .
 ```
 
 ### Swagger UI
