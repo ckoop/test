@@ -4,7 +4,7 @@
 # docker-compose.yml automatisch an den Zielpfad an.
 #
 # Aufruf: ./sync_to_server.sh <user@host> <remote_pfad>
-# Beispiel: ./sync_to_server.sh bumblebeee@192.168.178.55 /home/bumblebeee/docker/epoch
+# Beispiel: ./sync_to_server.sh user@host /pfad/zum/ziel
 
 set -e
 
