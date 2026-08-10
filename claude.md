@@ -20,6 +20,8 @@ docker compose down && docker compose up --build  # neu bauen wenn läuft
 - `http://<lokale-IP>:3000` — Handy im selben WLAN
 - `http://localhost:3000/api/health` — Health-Check
 
+**Docker-Healthcheck** (Backend, `docker-compose.yml`): `curl -f http://localhost:8000/api/health` alle 5 Minuten, Timeout 10s, 1 Retry — bewusst selten/streng gehalten, um Log-Rauschen zu vermeiden (ursprünglich 30s-Intervall/3 Retries).
+
 ---
 
 ## Architektur
@@ -616,6 +618,13 @@ docker compose down && docker compose up --build
 tar czf backup-$(date +%Y%m%d).tar.gz -C /home/christian/claude/data .
 ```
 
+### API-Smoke-Tests
+```bash
+docker compose up -d   # Container müssen laufen
+cd backend/tests && ./test_api.sh   # oder: BASE_URL=... ./test_api.sh
+```
+Curl-basiert, deckt die wichtigsten Endpunkte ab. Legt eigene Test-Projekte/-Einträge an und räumt sie danach wieder auf — rührt Produktivdaten nicht an.
+
 ### Swagger UI
 `http://localhost:8000/docs` (direkt am Backend, nicht über Nginx)
 
@@ -650,5 +659,9 @@ cd frontend && npm install && npm run dev
 | v4.4    | Idle-Erkennung: `useIdleDetection()` erkennt via `visibilitychange`, wenn der Rechner gesperrt/Tab länger inaktiv war während der Timer lief (≥3 Min), `IdleBanner` bietet nachträglichen Abzug an, neuer Endpoint `POST /api/timer/deduct` (rückwirkendes Pause/Resume ohne Unterbrechung, gedeckelt auf tatsächlich verstrichene Zeit) |
 | v4.5    | Idle-Erkennung: Schwelle in den Settings konfigurierbar (`IdleSettingsCard`) — pro Gerät via localStorage (`useIdleThresholdMinutes()`/`setIdleThresholdMinutes()`), bewusst nicht server-synced |
 | v4.6    | `NumberField` (Settings) ließ sich nicht unter 10 leeren/eintippen — Fallback `parseInt('') \|\| 1` schrieb bei jedem Löschen sofort wieder eine „1" rein, gefixt via erlaubtem leerem Zwischenzustand + Clamp erst bei `onBlur`. „Speichern" auf Pomodoro-/Idle-Settings-Karte navigiert jetzt per vollem Reload zurück zur Timer-Seite (`window.location.href = '/'`), damit der App-weite Pomodoro-State sofort aktuell ist |
+| v4.7    | Backup-TODO für SQLite-Datenverzeichnis ergänzt (Doku, kein Code) |
+| v4.8    | Gesperrte Nav-Items (während aktiver Pomodoro-Session) zeigen statt 🔒-Emoji eine ausgegraute Styling-Variante |
+| v4.9    | Docker-Volume durch Bind-Mount `/home/christian/claude/data` ersetzt (kein Docker-Volume mehr), Backup-Doku entsprechend angepasst |
+| v4.10   | Nur Doku-Sync: Healthcheck-Intervall (30s→5m, Retries 3→1), API-Smoke-Tests (`backend/tests/test_api.sh`) und fehlende Versionshistorie v4.7–v4.9 ergänzt |
 
-**Aktuelle Version: v4.6**
+**Aktuelle Version: v4.10**
