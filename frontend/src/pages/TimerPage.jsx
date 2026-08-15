@@ -101,7 +101,7 @@ export default function TimerPage({ activeTimer, setActiveTimer, pomodoro, pip }
           <h1 style={{ fontSize: 26, fontWeight: 800, letterSpacing: '-.03em' }}>{dayjs().format('D. MMMM')}</h1>
         </div>
         {totalToday > 0 && (
-          <div style={{ background: 'var(--accent-dim2)', border: '1px solid rgba(200,240,96,.14)', borderRadius: 'var(--r)', padding: '8px 13px', textAlign: 'right' }}>
+          <div style={{ background: 'var(--accent-dim2)', border: '1px solid color-mix(in srgb, var(--accent) 14%, transparent)', borderRadius: 'var(--r)', padding: '8px 13px', textAlign: 'right' }}>
             <div className="label" style={{ marginBottom: 2 }}>Heute</div>
             <div className="mono" style={{ fontSize: 16, color: 'var(--accent)' }}>{fmtMinutes(totalToday)}</div>
           </div>
@@ -111,7 +111,7 @@ export default function TimerPage({ activeTimer, setActiveTimer, pomodoro, pip }
       {error && <div style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: 'var(--r)', padding: '9px 12px', marginBottom: 12, fontSize: 13, color: 'var(--red)' }}>{error}</div>}
 
       {/* Timer card */}
-      <div className="card" style={{ marginBottom: 12, borderColor: (activeTimer || pomodoroActive) ? 'rgba(200,240,96,.25)' : 'var(--border)' }}>
+      <div className="card" style={{ marginBottom: 12, borderColor: (activeTimer || pomodoroActive) ? 'color-mix(in srgb, var(--accent) 25%, transparent)' : 'var(--border)' }}>
         {pomodoroActive ? (
           <PomodoroCard pomodoro={pomodoro} pip={pip} />
         ) : activeTimer ? (
@@ -145,7 +145,7 @@ export default function TimerPage({ activeTimer, setActiveTimer, pomodoro, pip }
         <div className="label" style={{ marginBottom: 11 }}>Tagesnotiz</div>
         <div style={{ display: 'flex', gap: 5, marginBottom: 10 }}>
           {MOODS.map((m, i) => (
-            <button key={i} onClick={() => setMood(mood === i+1 ? null : i+1)} style={{ fontSize: 19, flex: 1, padding: '5px 4px', border: `1px solid ${mood === i+1 ? 'rgba(200,240,96,.3)' : 'var(--border)'}`, borderRadius: 'var(--r)', background: mood === i+1 ? 'var(--accent-dim)' : 'transparent', cursor: 'pointer', transition: 'all .15s' }}>{m}</button>
+            <button key={i} onClick={() => setMood(mood === i+1 ? null : i+1)} style={{ fontSize: 19, flex: 1, padding: '5px 4px', border: `1px solid ${mood === i+1 ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : 'var(--border)'}`, borderRadius: 'var(--r)', background: mood === i+1 ? 'var(--accent-dim)' : 'transparent', cursor: 'pointer', transition: 'all .15s' }}>{m}</button>
           ))}
         </div>
         <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Was lief gut? Was war schwierig?" style={{ marginBottom: 9 }} />
@@ -451,7 +451,7 @@ function SendReportButton({ day }) {
   return (
     <div style={{ marginTop: 8 }}>
       {status && status !== 'sending' && (
-        <div style={{ marginBottom: 8, padding: '7px 10px', background: status === 'ok' ? 'var(--accent-dim)' : 'var(--red-dim)', border: `1px solid ${status === 'ok' ? 'rgba(200,240,96,.3)' : 'var(--red)'}`, borderRadius: 'var(--r)', fontSize: 11, color: status === 'ok' ? 'var(--accent)' : 'var(--red)' }}>
+        <div style={{ marginBottom: 8, padding: '7px 10px', background: status === 'ok' ? 'var(--accent-dim)' : 'var(--red-dim)', border: `1px solid ${status === 'ok' ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : 'var(--red)'}`, borderRadius: 'var(--r)', fontSize: 11, color: status === 'ok' ? 'var(--accent)' : 'var(--red)' }}>
           {status === 'ok' ? '✓ ' : '✗ '}{msg}
         </div>
       )}

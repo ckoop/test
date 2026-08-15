@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../api'
 import { useProjects, invalidateProjects } from '../hooks/useProjects'
 import { useIdleThresholdMinutes, setIdleThresholdMinutes } from '../hooks/useIdleDetection'
+import { THEMES, FONTS } from '../hooks/useTheme'
 
 const PRESET_COLORS = [
   '#c8f060', '#6699ff', '#ffaa00', '#ff4444',
@@ -9,7 +10,7 @@ const PRESET_COLORS = [
   '#aaaaaa', '#ff8844', '#bb88ff', '#44ffaa',
 ]
 
-export default function SettingsPage() {
+export default function SettingsPage({ theme, setTheme, font, setFont }) {
   const { projects, loading, refresh } = useProjects()
   const [newName, setNewName]   = useState('')
   const [newColor, setNewColor] = useState('#c8f060')
@@ -72,6 +73,8 @@ export default function SettingsPage() {
         </div>
       )}
 
+      <ThemeCard theme={theme} setTheme={setTheme} />
+      <FontCard font={font} setFont={setFont} />
       <PomodoroSettingsCard />
       <IdleSettingsCard />
 
@@ -180,6 +183,72 @@ export default function SettingsPage() {
       {/* ── Info ── */}
       <div style={{ marginTop: 24, padding: '12px 14px', background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--r)', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.7 }}>
         <strong style={{ color: 'var(--text)' }}>Hinweis:</strong> Projekte die bereits in Einträgen verwendet werden, können nicht gelöscht — nur archiviert werden. Archivierte Projekte erscheinen nicht mehr in der Auswahl.
+      </div>
+    </div>
+  )
+}
+
+function ThemeCard({ theme, setTheme }) {
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="label" style={{ marginBottom: 12 }}>Design</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {THEMES.map(t => {
+          const active = (theme || 'original') === t.id
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTheme(t.id)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '9px 12px', borderRadius: 'var(--r)',
+                border: `1px solid ${active ? t.accent : 'var(--border2)'}`,
+                background: active ? `color-mix(in srgb, ${t.accent} 12%, transparent)` : 'transparent',
+                cursor: 'pointer', transition: 'all .15s',
+              }}
+            >
+              <span style={{ width: 12, height: 12, borderRadius: '50%', background: t.accent, flexShrink: 0 }} />
+              <span style={{ textAlign: 'left' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: active ? t.accent : 'var(--text)' }}>{t.name}</div>
+                <div style={{ fontSize: 10, color: 'var(--text3)' }}>{t.sub}</div>
+              </span>
+              {active && <span style={{ marginLeft: 2, color: t.accent, fontSize: 13 }}>✓</span>}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function FontCard({ font, setFont }) {
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="label" style={{ marginBottom: 12 }}>Schriftart</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {FONTS.map(f => {
+          const active = (font || 'original') === f.id
+          return (
+            <button
+              key={f.id}
+              onClick={() => setFont(f.id)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '9px 12px', borderRadius: 'var(--r)',
+                border: `1px solid ${active ? 'var(--accent)' : 'var(--border2)'}`,
+                background: active ? 'var(--accent-dim)' : 'transparent',
+                cursor: 'pointer', transition: 'all .15s',
+              }}
+            >
+              <span style={{ fontFamily: f.family, fontSize: 17, fontWeight: 700, color: active ? 'var(--accent)' : 'var(--text)' }}>Aa</span>
+              <span style={{ textAlign: 'left' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: active ? 'var(--accent)' : 'var(--text)' }}>{f.name}</div>
+                <div style={{ fontSize: 10, color: 'var(--text3)' }}>{f.sub}</div>
+              </span>
+              {active && <span style={{ marginLeft: 2, color: 'var(--accent)', fontSize: 13 }}>✓</span>}
+            </button>
+          )
+        })}
       </div>
     </div>
   )
@@ -295,7 +364,7 @@ function ToggleButton({ active, label, onClick }) {
       className="btn btn-ghost"
       style={{
         fontSize: 11, padding: '7px 12px',
-        borderColor: active ? 'rgba(200,240,96,.4)' : 'var(--border2)',
+        borderColor: active ? 'color-mix(in srgb, var(--accent) 40%, transparent)' : 'var(--border2)',
         background: active ? 'var(--accent-dim)' : 'transparent',
         color: active ? 'var(--accent)' : 'var(--text2)',
       }}

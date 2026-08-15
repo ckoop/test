@@ -133,7 +133,7 @@ export default function ExportPage() {
       </div>
 
       {/* Range label */}
-      <div style={{ padding: '9px 12px', background: 'var(--accent-dim2)', border: '1px solid rgba(200,240,96,.12)', borderRadius: 'var(--r)', marginBottom: 18, fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text2)' }}>
+      <div style={{ padding: '9px 12px', background: 'var(--accent-dim2)', border: '1px solid color-mix(in srgb, var(--accent) 12%, transparent)', borderRadius: 'var(--r)', marginBottom: 18, fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text2)' }}>
         {fmtLabel(from)} → {fmtLabel(to)}
       </div>
 
@@ -195,7 +195,7 @@ export default function ExportPage() {
 
 function ExportCard({ title, subtitle, note, icon, loading, done, onExport }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 13, padding: '14px 16px', background: 'var(--bg2)', border: `1px solid ${done ? 'rgba(200,240,96,.3)' : 'var(--border)'}`, borderRadius: 'var(--rl)', transition: 'border-color .3s' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 13, padding: '14px 16px', background: 'var(--bg2)', border: `1px solid ${done ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : 'var(--border)'}`, borderRadius: 'var(--rl)', transition: 'border-color .3s' }}>
       <div style={{ width: 38, height: 38, background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 'var(--r)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: done ? 'var(--accent)' : 'var(--text2)' }}>
         {done ? <IcoDone /> : icon}
       </div>
