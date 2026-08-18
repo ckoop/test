@@ -181,6 +181,55 @@ export default function SettingsPage() {
       <div style={{ marginTop: 24, padding: '12px 14px', background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--r)', fontSize: 12, color: 'var(--text-2)', lineHeight: 1.7 }}>
         <strong style={{ color: 'var(--text)' }}>Hinweis:</strong> Projekte die bereits in Einträgen verwendet werden, können nicht gelöscht — nur archiviert werden. Archivierte Projekte erscheinen nicht mehr in der Auswahl.
       </div>
+
+      <DangerZoneCard />
+    </div>
+  )
+}
+
+function DangerZoneCard() {
+  const CONFIRM_WORD = 'ZURUECKSETZEN'
+  const [confirmText, setConfirmText] = useState('')
+  const [resetting, setResetting]     = useState(false)
+  const [error, setError]             = useState(null)
+
+  const handleReset = async () => {
+    if (confirmText !== CONFIRM_WORD) return
+    if (!confirm('Wirklich ALLE Daten unwiderruflich löschen (Zeiteinträge, Tagesnotizen, Mail-Protokoll, Projekte) und auf den Auslieferungszustand zurücksetzen?')) return
+    setResetting(true); setError(null)
+    try {
+      await api.resetDatabase()
+      window.location.href = '/'   // voller Reload, damit App-weiter State (Timer, Pomodoro, Projekte) frisch geladen wird
+    } catch (e) { setError(e.message); setResetting(false) }
+  }
+
+  return (
+    <div className="card" style={{ marginTop: 24, borderColor: 'var(--red)' }}>
+      <div className="label" style={{ marginBottom: 8, color: 'var(--red)' }}>⚠ Gefahrenzone</div>
+      <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 14, lineHeight: 1.7 }}>
+        Löscht <strong>alle</strong> Zeiteinträge, Tagesnotizen, Mail-Protokolle und Projekte unwiderruflich und setzt die Datenbank auf den Auslieferungszustand zurück (6 Standard-Projekte, Pomodoro-Standardwerte). Diese Aktion kann <strong>nicht</strong> rückgängig gemacht werden.
+      </div>
+      {error && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 10 }}>{error}</div>}
+      <div style={{ marginBottom: 10, fontSize: 11, color: 'var(--text3)' }}>
+        Zum Bestätigen <strong style={{ color: 'var(--text)' }}>{CONFIRM_WORD}</strong> eingeben:
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input
+          type="text"
+          placeholder={CONFIRM_WORD}
+          value={confirmText}
+          onChange={e => setConfirmText(e.target.value)}
+          style={{ flex: 1, marginBottom: 0 }}
+        />
+        <button
+          className="btn btn-danger"
+          style={{ width: 'auto', padding: '10px 16px', flexShrink: 0 }}
+          onClick={handleReset}
+          disabled={confirmText !== CONFIRM_WORD || resetting}
+        >
+          {resetting ? '…' : 'Zurücksetzen'}
+        </button>
+      </div>
     </div>
   )
 }

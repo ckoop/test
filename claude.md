@@ -264,6 +264,11 @@ timetracker/
 | POST   | /api/pomodoro/continue  | Nur bei `awaiting_confirmation` — startet die bereits gesetzte nächste Phase |
 | POST   | /api/pomodoro/stop      | Session abbrechen, zugehörigen `time_entry` sauber abschließen       |
 
+### Admin
+| Method | Path            | Beschreibung                                                             |
+|--------|-----------------|---------------------------------------------------------------------------|
+| POST   | /api/admin/reset | Body: `{ confirm: "ZURUECKSETZEN" }`. Löscht **alle** `time_entries`/`day_notes`/`mail_log`/`projects` und setzt Pomodoro-Settings/-State zurück; danach werden die 6 Standardprojekte (`DEFAULT_PROJECTS`) neu angelegt. Falsches/fehlendes `confirm` → 400, keine Änderung |
+
 ---
 
 ## Umgebungsvariablen (`.env`)
@@ -300,6 +305,7 @@ Alle Variablen optional — fehlen Credentials, ist Mail deaktiviert.
 - Farben: 12 Preset-Farben, Inline-Picker direkt am Eintrag
 - Archivieren statt Löschen wenn Projekt in Einträgen verwendet
 - Reihenfolge per `PUT /api/projects/reorder` mit ID-Array
+- **Gefahrenzone** (unten auf der Settings-Seite): `DangerZoneCard` in `SettingsPage.jsx` — Reset-Button ist erst aktiv, nachdem exakt `ZURUECKSETZEN` in ein Bestätigungsfeld getippt wurde, plus zusätzlicher `window.confirm()`-Dialog davor. Ruft `POST /api/admin/reset` und lädt danach die App per vollem Reload (`window.location.href = '/'`) neu. Die Bestätigungs-Zeichenkette wird bewusst auch serverseitig geprüft (nicht nur im Frontend), damit ein Reset nie allein durch einen rohen `POST`-Request ohne die UI ausgelöst werden kann
 
 ---
 
@@ -648,5 +654,6 @@ cd frontend && npm install && npm run dev
 | v4.9    | Docker-Volume durch Bind-Mount `/home/christian/claude/data` ersetzt (kein Docker-Volume mehr), Backup-Doku entsprechend angepasst |
 | v4.10   | Nur Doku-Sync: Healthcheck-Intervall (30s→5m, Retries 3→1), API-Smoke-Tests (`backend/tests/test_api.sh`) und fehlende Versionshistorie v4.7–v4.9 ergänzt. Nachträglich: Design-Themes (frühere v4.11–v4.15) bewusst zurückgebaut auf einziges festes Design — Neongrün (`#c8f060`) bleibt, Sans-Schrift jedoch von Syne auf Archivo geändert |
 | v4.11   | Backup-TODO für SQLite-Datenverzeichnis aus der Doku entfernt — wird auf einem anderen, alternativen Weg gelöst (Doku, kein Code) |
+| v4.12   | Neue Gefahrenzone in den Settings: Datenbank auf Auslieferungszustand zurücksetzen (`POST /api/admin/reset`, `DangerZoneCard`) — löscht alle Zeiteinträge/Notizen/Mail-Log/Projekte, seedet die 6 Standardprojekte + Pomodoro-Defaults neu. Bestätigung per Eingabe von „ZURUECKSETZEN" (Frontend + serverseitig geprüft) plus zusätzlichem `window.confirm()` |
 
-**Aktuelle Version: v4.11**
+**Aktuelle Version: v4.12**

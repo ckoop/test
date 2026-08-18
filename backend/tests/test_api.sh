@@ -229,6 +229,13 @@ expect_status "Mail-Konfiguration abrufen" 200
 curl_json GET /mail/log
 expect_status "Mail-Log abrufen" 200
 
+# ── 8. Admin-Reset (nur Ablehnungs-Pfad — echter Reset wuerde Produktivdaten loeschen) ──
+
+echo "== Admin-Reset (Negativtest) =="
+
+curl_json POST /admin/reset '{"confirm":"falsch"}'
+expect_status "Reset ohne korrekte Bestaetigung wird abgelehnt" 400
+
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 
 echo "== Cleanup =="

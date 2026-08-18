@@ -109,19 +109,20 @@ _migrate_columns()
 
 
 # ── Seed default projects ─────────────────────────────────────────────────────
+DEFAULT_PROJECTS = [
+    ("Allgemein",      "#888880", 0),
+    ("Entwicklung",    "#c8f060", 1),
+    ("Meeting",        "#6699ff", 2),
+    ("Planung",        "#ffaa00", 3),
+    ("Support",        "#ff4444", 4),
+    ("Dokumentation",  "#44bbff", 5),
+]
+
 def _seed_projects():
-    defaults = [
-        ("Allgemein",      "#888880", 0),
-        ("Entwicklung",    "#c8f060", 1),
-        ("Meeting",        "#6699ff", 2),
-        ("Planung",        "#ffaa00", 3),
-        ("Support",        "#ff4444", 4),
-        ("Dokumentation",  "#44bbff", 5),
-    ]
     db = SessionLocal()
     try:
         if db.query(Project).count() == 0:
-            for name, color, pos in defaults:
+            for name, color, pos in DEFAULT_PROJECTS:
                 db.add(Project(name=name, color=color, position=pos, active=1))
             db.commit()
     finally:
@@ -270,6 +271,10 @@ class MailLogOut(BaseModel):
 class SendReportRequest(BaseModel):
     day: date
     recipient: Optional[str] = None   # overrides MAIL_TO env
+
+
+class ResetConfirm(BaseModel):
+    confirm: str
 
 
 # ── Mail config helpers ─────────────────────────────────────────────────────────
@@ -740,6 +745,28 @@ def reorder_projects(order: List[int], db: Session = Depends(get_db)):
         if p: p.position = pos
     db.commit()
     return db.query(Project).filter(Project.active == 1).order_by(Project.position).all()
+
+
+# ── Admin: full database reset ───────────────────────────────────────────────────
+
+@app.post("/api/admin/reset")
+def reset_database(body: ResetConfirm, db: Session = Depends(get_db)):
+    if body.confirm != "ZURUECKSETZEN":
+        raise HTTPException(400, "Bestätigung fehlt oder falsch")
+    db.query(TimeEntry).delete()
+    db.query(DayNote).delete()
+    db.query(MailLog).delete()
+    db.query(Project).delete()
+    db.query(PomodoroSettings).delete()
+    db.query(PomodoroState).delete()
+    db.commit()
+    for name, color, pos in DEFAULT_PROJECTS:
+        db.add(Project(name=name, color=color, position=pos, active=1))
+    db.add(PomodoroSettings(id=1))
+    db.add(PomodoroState(id=1))
+    db.commit()
+    log.info("Database reset to defaults")
+    return {"ok": True}
 
 
 # ── Mail: outbound (SMTP) ────────────────────────────────────────────────────────

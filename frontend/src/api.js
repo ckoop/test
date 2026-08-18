@@ -46,6 +46,9 @@ export const api = {
   deleteProject:   (id) => req(`/projects/${id}`, { method: 'DELETE' }),
   reorderProjects: (order) => req('/projects/reorder', { method: 'PUT', body: JSON.stringify(order) }),
 
+  // Admin
+  resetDatabase: () => req('/admin/reset', { method: 'POST', body: JSON.stringify({ confirm: 'ZURUECKSETZEN' }) }),
+
   // Mail
   sendReport:    (data) => req('/mail/send-report', { method: 'POST', body: JSON.stringify(data) }),
   getMailLog:    (limit = 50) => req(`/mail/log?limit=${limit}`),
