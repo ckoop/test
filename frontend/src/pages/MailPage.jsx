@@ -90,7 +90,7 @@ export default function MailPage() {
           </div>
         </div>
         {sendResult && (
-          <div style={{ marginBottom: 10, padding: '8px 12px', background: sendResult.ok ? 'var(--accent-dim)' : 'var(--red-dim)', border: `1px solid ${sendResult.ok ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : 'var(--red)'}`, borderRadius: 'var(--r)', fontSize: 12, color: sendResult.ok ? 'var(--accent)' : 'var(--red)' }}>
+          <div style={{ marginBottom: 10, padding: '8px 12px', background: sendResult.ok ? 'var(--accent-dim)' : 'var(--red-dim)', border: `1px solid ${sendResult.ok ? 'rgba(200,240,96,.3)' : 'var(--red)'}`, borderRadius: 'var(--r)', fontSize: 12, color: sendResult.ok ? 'var(--accent)' : 'var(--red)' }}>
             {sendResult.ok ? '✓ ' : '✗ '}{sendResult.msg}
           </div>
         )}
@@ -113,7 +113,7 @@ export default function MailPage() {
             : 'IMAP nicht konfiguriert — Credentials in .env setzen.'}
         </div>
         {pollResult && (
-          <div style={{ marginBottom: 10, padding: '8px 12px', background: pollResult.ok ? 'var(--accent-dim)' : 'var(--red-dim)', border: `1px solid ${pollResult.ok ? 'color-mix(in srgb, var(--accent) 30%, transparent)' : 'var(--red)'}`, borderRadius: 'var(--r)', fontSize: 12, color: pollResult.ok ? 'var(--accent)' : 'var(--red)' }}>
+          <div style={{ marginBottom: 10, padding: '8px 12px', background: pollResult.ok ? 'var(--accent-dim)' : 'var(--red-dim)', border: `1px solid ${pollResult.ok ? 'rgba(200,240,96,.3)' : 'var(--red)'}`, borderRadius: 'var(--r)', fontSize: 12, color: pollResult.ok ? 'var(--accent)' : 'var(--red)' }}>
             {pollResult.ok ? '✓ ' : '✗ '}{pollResult.msg}
           </div>
         )}
@@ -138,7 +138,7 @@ export default function MailPage() {
           <div><span style={{ color: 'var(--accent)' }}>10:45-13:15</span> Entwicklung Auth-System</div>
           <div><span style={{ color: 'var(--accent)' }}>14:00-15:00</span> Allgemein</div>
           <div style={{ marginTop: 8, color: 'var(--text-3)' }}># Mit explizitem Datum:</div>
-          <div><span style={{ color: 'color-mix(in srgb, var(--accent) 60%, transparent)' }}>2026-06-01</span> <span style={{ color: 'var(--accent)' }}>09:00-10:00</span> Planung Roadmap</div>
+          <div><span style={{ color: 'rgba(200,240,96,.6)' }}>2026-06-01</span> <span style={{ color: 'var(--accent)' }}>09:00-10:00</span> Planung Roadmap</div>
         </div>
         <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-3)', lineHeight: 1.8 }}>
           Projekte: <span style={{ fontFamily: 'var(--font-mono)' }}>Allgemein · Entwicklung · Meeting · Planung · Support · Dokumentation</span><br/>
@@ -169,7 +169,7 @@ export default function MailPage() {
 
 function StatusCard({ label, ok, detail }) {
   return (
-    <div style={{ background: 'var(--bg3)', border: `1px solid ${ok ? 'color-mix(in srgb, var(--accent) 20%, transparent)' : 'var(--border)'}`, borderRadius: 'var(--r)', padding: '12px 14px' }}>
+    <div style={{ background: 'var(--bg-3)', border: `1px solid ${ok ? 'rgba(200,240,96,.2)' : 'var(--border)'}`, borderRadius: 'var(--r)', padding: '12px 14px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
         <div style={{ width: 6, height: 6, borderRadius: '50%', background: ok ? 'var(--accent)' : 'var(--text-3)', flexShrink: 0 }} />
         <div className="label">{label}</div>
@@ -186,7 +186,7 @@ function StatusCard({ label, ok, detail }) {
 
 function MiniStat({ label, value, accent }) {
   return (
-    <div style={{ background: 'var(--bg3)', border: `1px solid ${accent ? 'color-mix(in srgb, var(--accent) 20%, transparent)' : 'var(--border)'}`, borderRadius: 'var(--r)', padding: '11px 13px' }}>
+    <div style={{ background: 'var(--bg-3)', border: `1px solid ${accent ? 'rgba(200,240,96,.2)' : 'var(--border)'}`, borderRadius: 'var(--r)', padding: '11px 13px' }}>
       <div className="label" style={{ marginBottom: 4 }}>{label}</div>
       <div className="mono" style={{ fontSize: 20, color: accent ? 'var(--accent)' : 'var(--text)', letterSpacing: '-.02em' }}>{value}</div>
     </div>

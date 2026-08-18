@@ -13,12 +13,11 @@ import { api } from './api'
 import { useTimer, fmtDuration } from './hooks/useTimer'
 import { usePomodoro } from './hooks/usePomodoro'
 import { useIdleDetection } from './hooks/useIdleDetection'
-import { useTheme, useFont } from './hooks/useTheme'
 import FloatingWidget, { usePipWidget } from './FloatingWidget'
 
 dayjs.extend(isoWeek)
 
-export const APP_VERSION = 'v4.15'
+export const APP_VERSION = 'v4.10'
 
 const NAV = [
   { to: '/',        label: 'Timer',   Icon: IcoTimer   },
@@ -36,8 +35,6 @@ export default function App() {
   const [statsMonth, setStatsMonth] = useState(dayjs().month() + 1)
   const [historyProject, setHistoryProject] = useState('')
   const [imapConfigured, setImapConfigured] = useState(null)
-  const { theme, setTheme } = useTheme()
-  const { font, setFont } = useFont()
   const pomodoro = usePomodoro()
   const pomodoroActive = !!pomodoro.state?.phase
   const pip = usePipWidget()
@@ -117,7 +114,7 @@ export default function App() {
           <Route path="/stats"   element={<StatsPage year={statsYear} month={statsMonth} setYear={setStatsYear} setMonth={setStatsMonth} />} />
           <Route path="/mail"    element={<MailPage />} />
           <Route path="/export"   element={<ExportPage />} />
-          <Route path="/settings" element={<SettingsPage theme={theme} setTheme={setTheme} font={font} setFont={setFont} />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </div>
       <BottomNav hasActive={!!activeTimer} isPaused={isPaused} badges={mobileBadges} locked={pomodoroActive} />

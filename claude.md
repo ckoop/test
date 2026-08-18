@@ -311,8 +311,7 @@ Alle Variablen optional — fehlen Credentials, ist Mail deaktiviert.
 - "Filter zurücksetzen"-Button erscheint, sobald einer der beiden aktiv ist
 
 **StatsPage** — die "Nach Projekt"-Balken (und die Legende darunter) sind anklickbar (`selectedProject`-State, Klick auf denselben Balken hebt die Auswahl wieder auf):
-- Balken, Legenden-Punkt und Anteils-Balken verwenden die individuelle `project.color` aus den Settings (zusätzlicher `api.getProjects(true)`-Call beim Laden, `include_archived=true` da alte Einträge archivierte Projekte referenzieren können) — nicht mehr eine rang-basierte Akzentfarben-Abstufung. Fallback `var(--text3)` falls ein Entry-Projektname zu keinem aktuellen Projekt mehr passt (z.B. nach Umbenennung)
-- Ausgewählter Balken/Legendeneintrag wird hervorgehoben, alle anderen abgedunkelt (Balken über `fillOpacity`, Legende über die bestehende Zeilen-Opacity)
+- Ausgewählter Balken/Legendeneintrag wird hervorgehoben, alle anderen abgedunkelt
 - Die drei oberen Kacheln **Gesamtstunden / Arbeitstage / Ø pro Tag** rechnen bei aktiver Auswahl auf das gefilterte Projekt um (Werte aus den geladenen `entries`, nicht aus `stats`)
 - Filter-Chip mit ✕-Button oberhalb der Kacheln; wird beim Monatswechsel automatisch zurückgesetzt
 - Unabhängig davon: die "Überstunden"-Karte hat einen eigenen Pro-Tag/Pro-Projekt-Umschalter (siehe unten) — beide Filter sind separate State-Variablen
@@ -488,17 +487,17 @@ Bei einer einzigen ungültigen Zeile:
 
 ## Frontend-Design-System
 
-**CSS-Variablen** (Werte unten = Theme „Original", der Standard-Zustand ohne `data-theme`-Attribut):
+**CSS-Variablen:**
 ```css
 --bg: #0a0a0a      --bg2: #111        --bg3: #1a1a1a    --bg4: #222
 --border: #2a2a2a  --border2: #333
 --text: #e8e4dc    --text2: #888880   --text3: #555550
---accent: #c8f060
---red: #ff4444     --amber: #ffaa00
---sans: 'Syne'     --mono: 'DM Mono'
+--accent: #c8f060  --accent-dim: rgba(200,240,96,.12)
+--red: #ff4444     --red-dim: rgba(255,68,68,.12)
+--amber: #ffaa00   --amber-dim: rgba(255,170,0,.12)
+--sans: 'Archivo'  --mono: 'DM Mono'
 --r: 4px           --rl: 8px
 ```
-`--accent-dim`/`--accent-dim2`/`--red-dim`/`--amber-dim` werden **einmalig** in `:root` per `color-mix(in srgb, var(--accent) 12%, transparent)` (analog für red/amber) aus der jeweiligen Basisfarbe abgeleitet — kein Theme muss diese Ableitungen selbst pflegen.
 
 **Source-Badges:**
 | `source` | Herkunft | Farbe              | Label   |
@@ -508,25 +507,6 @@ Bei einer einzigen ungültigen Zeile:
 | 2        | E-Mail   | `#ffaa00` (Amber)  | E-Mail  |
 
 **Navigation:** 7-Tab Bottom Nav — Timer · Woche · Verlauf · Stats · Mail · Export · Settings
-
----
-
-## Design-Themes (SettingsPage)
-
-**Farbe und Schrift sind unabhängig wählbar** — zwei separate Settings-Karten mit je 4 Optionen, die frei kombinierbar sind (z.B. Original-Farbe mit Archivo-Schrift). Beide nutzen dieselben 4 Namen, weil sie aus denselben Design-Richtungen stammen, sind aber technisch komplett getrennt: `[data-theme="…"]` überschreibt nur `--bg*`/`--border*`/`--text*`/`--accent`, `[data-font="…"]` nur `--sans`/`--mono`. `--red`/`--amber` sind bewusst **fest, weder theme- noch fontabhängig** (nur einmal in `:root`), damit Status-Farben (Überstunden, Fehler) nie mit dem gewählten Akzent kollidieren.
-
-| Name       | `data-theme` → Akzent | `data-font` → Sans / Mono |
-|------------|------------------------|----------------------------|
-| Original   | *(kein Attribut)* `#c8f060` Neongrün | *(kein Attribut)* Syne / DM Mono |
-| Puls       | `puls` `#ff6347` Tomato | `puls` Archivo / DM Mono |
-| Archiv     | `archiv` `#2fb8a6` Petrol | `archiv` Fraunces / JetBrains Mono |
-| Loop       | `loop` `#b487ff` Violett | `loop` Fredoka / Space Mono |
-
-**`useTheme()`/`useFont()`** (`hooks/useTheme.js`, beide über eine gemeinsame `useAttrSetting(storageKey, attrName)`-Hilfsfunktion) halten ihren Wert je in eigenem `localStorage`-Key (`epoch.theme`/`epoch.font`) und setzen/entfernen ihr jeweiliges Attribut auf `document.documentElement` per `useEffect` — reiner CSS-Variablen-Wechsel, kein Reload nötig (anders als Pomodoro-/Idle-Settings). Beide in `App.jsx` gemountet (wie `activeTimer`/`pomodoro`), als Props an `SettingsPage` durchgereicht. **Bewusst nicht server-synced** — analog zur Idle-Schwelle eine einfache Pro-Gerät-Anzeigeeinstellung ohne Backend-Feld.
-
-**Alle Seiten-Komponenten verwenden ausschließlich `var(--accent)` und `color-mix(in srgb, var(--accent) N%, transparent)`** statt fest verdrahteter Hex-/rgba-Werte (TimerPage, MailPage, ExportPage, WeekPage, StatsPage inkl. Recharts-Tooltip/-Achsen) — das war Voraussetzung dafür, dass ein Theme-Wechsel überhaupt alle Stellen erreicht. `SettingsPage`s `PRESET_COLORS`-Palette (Projekt-Tag-Farben) bleibt davon unberührt, da sie unabhängig vom App-Theme ist.
-
-Favicon (`favicon.svg`) ist **statisch auf Original/Grün fixiert** — reagiert nicht auf die Theme-Wahl (Browser-Icons lassen sich nicht ohne Weiteres laufzeit-abhängig austauschen, und ein fixes Icon als App-Identität ist ohnehin üblich).
 
 ---
 
@@ -682,12 +662,6 @@ cd frontend && npm install && npm run dev
 | v4.7    | Backup-TODO für SQLite-Datenverzeichnis ergänzt (Doku, kein Code) |
 | v4.8    | Gesperrte Nav-Items (während aktiver Pomodoro-Session) zeigen statt 🔒-Emoji eine ausgegraute Styling-Variante |
 | v4.9    | Docker-Volume durch Bind-Mount `/home/christian/claude/data` ersetzt (kein Docker-Volume mehr), Backup-Doku entsprechend angepasst |
-| v4.10   | Nur Doku-Sync: Healthcheck-Intervall (30s→5m, Retries 3→1), API-Smoke-Tests (`backend/tests/test_api.sh`) und fehlende Versionshistorie v4.7–v4.9 ergänzt |
-| v4.11   | Design-Richtung „Puls" umgesetzt: Akzentfarbe Grün→Orange (`--accent: #ff7a33`, vorher `#c8f060`), Sans-Schrift Syne→Archivo (Google-Fonts-Link + Font-Weights angepasst). Alle bisher fest verdrahteten `rgba(200,240,96,…)`/`#c8f060`-Stellen in TimerPage, MailPage, ExportPage, WeekPage, StatsPage sowie Favicon auf die neue Akzentfarbe umgestellt. Amber/Rot (Status-Farben) unverändert. `PRESET_COLORS` in SettingsPage (Projekt-Tag-Farben, unabhängig vom App-Akzent) bewusst nicht angefasst |
-| v4.12   | Akzentfarbe nachjustiert: `#ff7a33` lag mit nur 19° Farbtonabstand zu spät zu nah an Amber (Überstunden-Warnung), Tags waren kaum auseinanderzuhalten. Auf `#ff6347` (Tomato) verschoben — 31° Abstand zu Amber, da Amber häufiger neben dem Akzent auftaucht (Timer-Karte) als Rot |
-| v4.13   | StatsPage „Nach Projekt": Balken/Legende/Anteils-Balken zeigen jetzt die individuelle `project.color` aus den Settings statt einer rang-basierten Akzentfarben-Abstufung — die dort konfigurierte Farbe wurde bisher nirgends im Frontend genutzt |
-| v4.14   | Design-Themes als echte Einstellmöglichkeit: Settings-Karte mit 4 wählbaren Themes (Original/Neongrün als Standard, Puls, Archiv, Loop), `useTheme()`-Hook + `[data-theme]`-CSS-Overrides, sofort wirksam ohne Reload. Voraussetzung dafür: alle fest verdrahteten Akzentfarben in TimerPage/MailPage/ExportPage/WeekPage/StatsPage auf `var(--accent)`/`color-mix()` umgestellt. `--accent-dim`-Varianten jetzt einmalig per `color-mix()` aus `--accent` abgeleitet statt pro Theme dupliziert. Favicon zurück auf Grün (statisch, themeunabhängig) |
+| v4.10   | Nur Doku-Sync: Healthcheck-Intervall (30s→5m, Retries 3→1), API-Smoke-Tests (`backend/tests/test_api.sh`) und fehlende Versionshistorie v4.7–v4.9 ergänzt. Nachträglich: Design-Themes (v4.11–v4.15) bewusst zurückgebaut auf einziges festes Design — Neongrün (`#c8f060`) bleibt, Sans-Schrift jedoch von Syne auf Archivo geändert |
 
-| v4.15   | Design-Themes: Farbe und Schrift jetzt unabhängig wählbar statt als festes Paar — neues `[data-font]`-Attribut/`FontCard` neben dem bestehenden `[data-theme]`/`ThemeCard`. `useTheme()`/`useFont()` teilen sich jetzt eine gemeinsame `useAttrSetting()`-Hilfsfunktion in `hooks/useTheme.js` |
-
-**Aktuelle Version: v4.15**
+**Aktuelle Version: v4.10**

@@ -71,13 +71,13 @@ export default function WeekPage() {
         <div className="card" style={{ marginBottom: 12, padding: '14px 16px' }}>
           <div style={{ position: 'relative' }}>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 5, height: 64 }}>
-              <div style={{ position: 'absolute', left: 0, right: 0, bottom: `${(8*60/maxMin)*64}px`, borderTop: '1px dashed color-mix(in srgb, var(--accent) 20%, transparent)', pointerEvents: 'none' }} />
+              <div style={{ position: 'absolute', left: 0, right: 0, bottom: `${(8*60/maxMin)*64}px`, borderTop: '1px dashed rgba(200,240,96,.2)', pointerEvents: 'none' }} />
               {weekData.map((d, i) => {
                 const h = maxMin > 0 ? (d.total_minutes / maxMin) * 64 : 0
                 const isToday = d.date === today
                 return (
                   <div key={d.date} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
-                    <div style={{ width: '100%', height: Math.max(h, d.total_minutes > 0 ? 3 : 0), background: isToday ? 'var(--accent)' : i >= 5 ? 'var(--bg4)' : 'color-mix(in srgb, var(--accent) 30%, transparent)', borderRadius: '3px 3px 0 0', transition: 'height .5s' }} />
+                    <div style={{ width: '100%', height: Math.max(h, d.total_minutes > 0 ? 3 : 0), background: isToday ? 'var(--accent)' : i >= 5 ? 'var(--bg4)' : 'rgba(200,240,96,.3)', borderRadius: '3px 3px 0 0', transition: 'height .5s' }} />
                   </div>
                 )
               })}
@@ -121,7 +121,7 @@ function DayCard({ day, today, onAddManual, onRefresh }) {
   const finished  = day.entries.filter(e => e.end_time)
 
   return (
-    <div className="card-sm" style={{ opacity: isWeekend && day.total_minutes === 0 ? .4 : 1, border: isToday ? '1px solid color-mix(in srgb, var(--accent) 25%, transparent)' : '1px solid var(--border)' }}>
+    <div className="card-sm" style={{ opacity: isWeekend && day.total_minutes === 0 ? .4 : 1, border: isToday ? '1px solid rgba(200,240,96,.25)' : '1px solid var(--border)' }}>
       <div className="flex items-center gap-3" onClick={() => finished.length > 0 && setExpanded(x => !x)} style={{ cursor: finished.length > 0 ? 'pointer' : 'default' }}>
         <div style={{ width: 34, textAlign: 'center', flexShrink: 0 }}>
           <div className="label" style={{ fontSize: 9 }}>{d.format('ddd')}</div>

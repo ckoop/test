@@ -11,7 +11,6 @@ export const MONTHS = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','O
 export default function StatsPage({ year, month, setYear, setMonth }) {
   const [stats, setStats] = useState(null)
   const [entries, setEntries] = useState([])
-  const [projectColors, setProjectColors] = useState({})
   const [loading, setLoading] = useState(true)
   const [selectedProject, setSelectedProject] = useState(null)
   const [overtimeView, setOvertimeView] = useState('day') // 'day' | 'project'
@@ -24,11 +23,7 @@ export default function StatsPage({ year, month, setYear, setMonth }) {
     Promise.all([
       api.getMonthlyStats(year, month),
       api.getEntries({ from_date: fd.format('YYYY-MM-DD'), to_date: td.format('YYYY-MM-DD') }),
-      api.getProjects(true), // inkl. archivierte, da alte Einträge sie noch referenzieren können
-    ]).then(([s, e, projects]) => {
-      setStats(s); setEntries(e)
-      setProjectColors(Object.fromEntries(projects.map(p => [p.name, p.color])))
-    }).catch(() => {}).finally(() => setLoading(false))
+    ]).then(([s, e]) => { setStats(s); setEntries(e) }).catch(() => {}).finally(() => setLoading(false))
   }, [year, month])
 
   const toggleProject = (name) => setSelectedProject(sp => sp === name ? null : name)
@@ -122,7 +117,7 @@ export default function StatsPage({ year, month, setYear, setMonth }) {
               { label: 'Ø pro Tag',     val: (selectedProject ? scopedWorkingDays : stats?.working_days) > 0 ? `${Math.round((selectedProject ? scopedTotalHours : stats.total_hours)/(selectedProject ? scopedWorkingDays : stats.working_days)*10)/10}h` : '–' },
               { label: 'Projekte',      val: `${projData.length}` },
             ].map(({ label, val, accent }) => (
-              <div key={label} style={{ background: 'var(--bg3)', border: `1px solid ${accent ? 'color-mix(in srgb, var(--accent) 20%, transparent)' : 'var(--border)'}`, borderRadius: 'var(--r)', padding: 13 }}>
+              <div key={label} style={{ background: 'var(--bg3)', border: `1px solid ${accent ? 'rgba(200,240,96,.2)' : 'var(--border)'}`, borderRadius: 'var(--r)', padding: 13 }}>
                 <div className="label" style={{ marginBottom: 5 }}>{label}</div>
                 <div className="mono" style={{ fontSize: 22, color: accent ? 'var(--accent)' : 'var(--text)', letterSpacing: '-.02em' }}>{val}</div>
               </div>
@@ -137,25 +132,24 @@ export default function StatsPage({ year, month, setYear, setMonth }) {
               </div>
               <ResponsiveContainer width="100%" height={160}>
                 <BarChart data={projData} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-                  <XAxis dataKey="name" tick={{ fill: 'var(--text3)', fontSize: 10, fontFamily: 'var(--mono)' }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 4, fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--text)' }} formatter={(v) => [`${v}h`]} labelFormatter={() => ''} cursor={{ fill: 'color-mix(in srgb, var(--accent) 4%, transparent)' }} />
+                  <XAxis dataKey="name" tick={{ fill: '#555550', fontSize: 10, fontFamily: 'DM Mono' }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ background: '#1a1a1a', border: '1px solid #2a2a2a', borderRadius: 4, fontFamily: 'DM Mono', fontSize: 11, color: '#e8e4dc' }} formatter={(v) => [`${v}h`]} labelFormatter={() => ''} cursor={{ fill: 'rgba(200,240,96,.04)' }} />
                   <Bar dataKey="hours" radius={[3,3,0,0]}>
                     {projData.map((p, i) => (
                       <Cell
                         key={i}
                         cursor="pointer"
                         onClick={() => toggleProject(p.name)}
-                        fill={projectColors[p.name] || 'var(--text3)'}
-                        fillOpacity={selectedProject ? (p.name === selectedProject ? 1 : .25) : 1}
+                        fill={selectedProject ? (p.name === selectedProject ? '#c8f060' : 'rgba(200,240,96,.1)') : (i === 0 ? '#c8f060' : `rgba(200,240,96,${Math.max(.5-i*.1,.15)})`)}
                       />
                     ))}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
               <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {projData.map((p) => {
+                {projData.map((p, i) => {
                   const isSelected = p.name === selectedProject
-                  const dotColor = projectColors[p.name] || 'var(--text3)'
+                  const dotColor = selectedProject ? (isSelected ? '#c8f060' : 'rgba(200,240,96,.1)') : (i === 0 ? '#c8f060' : `rgba(200,240,96,${Math.max(.5-i*.1,.15)})`)
                   return (
                     <div
                       key={p.name}
@@ -172,7 +166,7 @@ export default function StatsPage({ year, month, setYear, setMonth }) {
                       <div className="mono" style={{ fontSize: 11, color: 'var(--text2)' }}>{p.hours}h</div>
                       <div className="mono" style={{ fontSize: 10, color: 'var(--text3)', width: 30, textAlign: 'right' }}>{stats.total_hours > 0 ? Math.round(p.hours/stats.total_hours*100) : 0}%</div>
                       <div style={{ width: 52, height: 2, background: 'var(--bg4)', borderRadius: 2, overflow: 'hidden', flexShrink: 0 }}>
-                        <div style={{ height: '100%', width: `${stats.total_hours > 0 ? p.hours/stats.total_hours*100 : 0}%`, background: projectColors[p.name] || 'var(--text3)', borderRadius: 2 }} />
+                        <div style={{ height: '100%', width: `${stats.total_hours > 0 ? p.hours/stats.total_hours*100 : 0}%`, background: i === 0 ? '#c8f060' : 'rgba(200,240,96,.4)', borderRadius: 2 }} />
                       </div>
                     </div>
                   )
