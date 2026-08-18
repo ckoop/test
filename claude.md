@@ -583,22 +583,6 @@ Document Picture-in-Picture (siehe „Schwebendes Fenster (Floating Widget) im D
 - **HTTPS Pflicht** für Service Worker + Push (außer `localhost`) — Voraussetzung ist der geplante Let's-Encrypt-Rollout
 - iOS nur wenn PWA per „Zum Home-Bildschirm hinzufügen" installiert ist, iOS ≥ 16.4, stärker eingeschränkt als Android
 
-### Backup-Lösung für SQLite-Datenverzeichnis
-
-Aktuell kein automatisiertes Backup — die DB liegt als Bind-Mount unter `/home/christian/claude/data/timetracker.db` auf dem Host (kein Docker-Volume mehr, s. Architektur oben), ein Datenverlust bei versehentlichem Löschen/Host-Crash wäre nicht wiederherstellbar.
-
-**Schritte:**
-1. Backup-Skript (`backup.sh`): packt `/home/christian/claude/data/timetracker.db` direkt als `tar.gz` mit Datumsstempel — kein Hilfscontainer mehr nötig, da normaler Host-Pfad
-2. Vor dem Backup Backend kurz stoppen (`docker compose stop backend`) für konsistenten Snapshot, danach wieder starten — Alternative `cp` bei laufendem Container ist einfacher, aber nicht garantiert konsistent
-3. Rotation/Aufbewahrung klären (z. B. letzte 7 Tage + letzte 4 Wochen behalten, ältere löschen)
-4. Ablagespeicherort für Backups festlegen (externe Platte, NAS, Cloud-Storage?) — noch offen
-5. Automatisierung per Cron auf dem Host
-
-**Aufwand:** ~1 Stunde für Skript + Cron, je nach gewähltem Ablageort ggf. mehr.
-
-**Zu beachten:**
-- Restore-Vorgang einmal testen, nicht nur Backup — sonst unklar ob Dump im Ernstfall wirklich nutzbar ist
-
 ---
 
 ## Häufige Aufgaben
@@ -662,6 +646,7 @@ cd frontend && npm install && npm run dev
 | v4.7    | Backup-TODO für SQLite-Datenverzeichnis ergänzt (Doku, kein Code) |
 | v4.8    | Gesperrte Nav-Items (während aktiver Pomodoro-Session) zeigen statt 🔒-Emoji eine ausgegraute Styling-Variante |
 | v4.9    | Docker-Volume durch Bind-Mount `/home/christian/claude/data` ersetzt (kein Docker-Volume mehr), Backup-Doku entsprechend angepasst |
-| v4.10   | Nur Doku-Sync: Healthcheck-Intervall (30s→5m, Retries 3→1), API-Smoke-Tests (`backend/tests/test_api.sh`) und fehlende Versionshistorie v4.7–v4.9 ergänzt. Nachträglich: Design-Themes (v4.11–v4.15) bewusst zurückgebaut auf einziges festes Design — Neongrün (`#c8f060`) bleibt, Sans-Schrift jedoch von Syne auf Archivo geändert |
+| v4.10   | Nur Doku-Sync: Healthcheck-Intervall (30s→5m, Retries 3→1), API-Smoke-Tests (`backend/tests/test_api.sh`) und fehlende Versionshistorie v4.7–v4.9 ergänzt. Nachträglich: Design-Themes (frühere v4.11–v4.15) bewusst zurückgebaut auf einziges festes Design — Neongrün (`#c8f060`) bleibt, Sans-Schrift jedoch von Syne auf Archivo geändert |
+| v4.11   | Backup-TODO für SQLite-Datenverzeichnis aus der Doku entfernt — wird auf einem anderen, alternativen Weg gelöst (Doku, kein Code) |
 
-**Aktuelle Version: v4.10**
+**Aktuelle Version: v4.11**
