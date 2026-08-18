@@ -626,7 +626,25 @@ cd frontend && npm install && npm run dev
 
 ---
 
-## Versionshistorie
+## Versionierung
+
+Es gibt **zwei getrennte Versionszähler**, die bewusst unterschiedlich oft hochgezählt werden:
+
+- **App-Version** (`APP_VERSION` in `frontend/src/App.jsx`, sichtbar in der Sidebar) — Semver-artig `0.1.x`, wird **nur bei echten Code-/Feature-Änderungen** hochgezählt, nicht bei reinen Doku-Korrekturen.
+- **Doku-Version** (diese Datei) — die alte `v4.x`-Zählung, läuft unverändert weiter und wird bei **jeder** Änderung an `claude.md` hochgezählt, egal ob reine Doku-Korrektur oder Begleitdoku zu einem Feature.
+
+Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Zähler). Ab hier laufen sie auseinander — `v4.12` ist der letzte gemeinsame Stand, `0.1.12` der Startpunkt der neuen eigenständigen App-Version.
+
+**Aktuelle App-Version: 0.1.12**
+**Aktuelle Doku-Version: v4.13**
+
+### App-Versionshistorie
+
+| Version | Änderungen |
+|---------|------------|
+| 0.1.12  | Startpunkt der eigenständigen App-Versionierung (vorher gemeinsam mit der Doku-Version gezählt, zuletzt als „v4.12"). Kein Code-Unterschied zum vorherigen Stand — reine Umstellung der Zählweise |
+
+### Doku-Versionshistorie
 
 | Version | Änderungen |
 |---------|------------|
@@ -655,5 +673,4 @@ cd frontend && npm install && npm run dev
 | v4.10   | Nur Doku-Sync: Healthcheck-Intervall (30s→5m, Retries 3→1), API-Smoke-Tests (`backend/tests/test_api.sh`) und fehlende Versionshistorie v4.7–v4.9 ergänzt. Nachträglich: Design-Themes (frühere v4.11–v4.15) bewusst zurückgebaut auf einziges festes Design — Neongrün (`#c8f060`) bleibt, Sans-Schrift jedoch von Syne auf Archivo geändert |
 | v4.11   | Backup-TODO für SQLite-Datenverzeichnis aus der Doku entfernt — wird auf einem anderen, alternativen Weg gelöst (Doku, kein Code) |
 | v4.12   | Neue Gefahrenzone in den Settings: Datenbank auf Auslieferungszustand zurücksetzen (`POST /api/admin/reset`, `DangerZoneCard`) — löscht alle Zeiteinträge/Notizen/Mail-Log/Projekte, seedet die 6 Standardprojekte + Pomodoro-Defaults neu. Bestätigung per Eingabe von „ZURUECKSETZEN" (Frontend + serverseitig geprüft) plus zusätzlichem `window.confirm()` |
-
-**Aktuelle Version: v4.12**
+| v4.13   | App-Version und Doku-Version entkoppelt (s. „Versionierung" oben) — Doku-only-Änderungen zählen ab jetzt nur noch diesen `v4.x`-Zähler hoch, nicht mehr `APP_VERSION` |
