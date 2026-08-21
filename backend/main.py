@@ -6,7 +6,8 @@ from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from pydantic import BaseModel
 from datetime import datetime, date, timedelta
 from typing import Optional, List
-import os, csv, io, json as json_lib, re, logging, asyncio, imaplib, email as email_lib, email.utils
+import os, csv, io, json as json_lib, re, logging, asyncio, imaplib, email as email_lib, email.utils, shutil
+from pathlib import Path
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import smtplib, ssl
@@ -753,6 +754,13 @@ def reorder_projects(order: List[int], db: Session = Depends(get_db)):
 def reset_database(body: ResetConfirm, db: Session = Depends(get_db)):
     if body.confirm != "ZURUECKSETZEN":
         raise HTTPException(400, "Bestätigung fehlt oder falsch")
+    if engine.dialect.name == "sqlite" and engine.url.database:
+        db_path = Path(engine.url.database)
+        if db_path.exists():
+            backup_path = db_path.with_name(f"{db_path.stem}_backup_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}{db_path.suffix}")
+            db.commit()
+            shutil.copy2(db_path, backup_path)
+            log.info(f"Database backed up to {backup_path}")
     db.query(TimeEntry).delete()
     db.query(DayNote).delete()
     db.query(MailLog).delete()

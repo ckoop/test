@@ -205,9 +205,9 @@ function DangerZoneCard() {
 
   return (
     <div className="card" style={{ marginTop: 24, borderColor: 'var(--red)' }}>
-      <div className="label" style={{ marginBottom: 8, color: 'var(--red)' }}>⚠ Gefahrenzone</div>
+      <div className="label" style={{ marginBottom: 8, color: 'var(--red)' }}>Datenbank zurücksetzen</div>
       <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 14, lineHeight: 1.7 }}>
-        Löscht <strong>alle</strong> Zeiteinträge, Tagesnotizen, Mail-Protokolle und Projekte unwiderruflich und setzt die Datenbank auf den Auslieferungszustand zurück (6 Standard-Projekte, Pomodoro-Standardwerte). Diese Aktion kann <strong>nicht</strong> rückgängig gemacht werden.
+        Löscht <strong>alle</strong> Zeiteinträge, Tagesnotizen, Mail-Protokolle und Projekte und setzt die Datenbank auf den Auslieferungszustand zurück (6 Standard-Projekte, Pomodoro-Standardwerte). Die bestehende Datenbank wird vorher automatisch als Kopie gesichert.
       </div>
       {error && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 10 }}>{error}</div>}
       <div style={{ marginBottom: 10, fontSize: 11, color: 'var(--text3)' }}>

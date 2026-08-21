@@ -635,14 +635,15 @@ Es gibt **zwei getrennte Versionszähler**, die bewusst unterschiedlich oft hoch
 
 Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Zähler). Ab hier laufen sie auseinander — `v4.12` ist der letzte gemeinsame Stand, `0.1.12` der Startpunkt der neuen eigenständigen App-Version.
 
-**Aktuelle App-Version: 0.1.12**
-**Aktuelle Doku-Version: v4.13**
+**Aktuelle App-Version: 0.1.13**
+**Aktuelle Doku-Version: v4.14**
 
 ### App-Versionshistorie
 
 | Version | Änderungen |
 |---------|------------|
 | 0.1.12  | Startpunkt der eigenständigen App-Versionierung (vorher gemeinsam mit der Doku-Version gezählt, zuletzt als „v4.12"). Kein Code-Unterschied zum vorherigen Stand — reine Umstellung der Zählweise |
+| 0.1.13  | Gefahrenzone-Karte umbenannt zu „Datenbank zurücksetzen" (kein Warndreieck/„Gefahrenzone"-Framing mehr). `POST /api/admin/reset` sichert die bestehende SQLite-Datei jetzt automatisch vor dem Zurücksetzen als Zeitstempel-Kopie (`timetracker_backup_<YYYYMMDD_HHMMSS>.db`) im selben Datenverzeichnis |
 
 ### Doku-Versionshistorie
 
@@ -674,3 +675,4 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 | v4.11   | Backup-TODO für SQLite-Datenverzeichnis aus der Doku entfernt — wird auf einem anderen, alternativen Weg gelöst (Doku, kein Code) |
 | v4.12   | Neue Gefahrenzone in den Settings: Datenbank auf Auslieferungszustand zurücksetzen (`POST /api/admin/reset`, `DangerZoneCard`) — löscht alle Zeiteinträge/Notizen/Mail-Log/Projekte, seedet die 6 Standardprojekte + Pomodoro-Defaults neu. Bestätigung per Eingabe von „ZURUECKSETZEN" (Frontend + serverseitig geprüft) plus zusätzlichem `window.confirm()` |
 | v4.13   | App-Version und Doku-Version entkoppelt (s. „Versionierung" oben) — Doku-only-Änderungen zählen ab jetzt nur noch diesen `v4.x`-Zähler hoch, nicht mehr `APP_VERSION` |
+| v4.14   | Gefahrenzone-Karte in den Settings umbenannt zu „Datenbank zurücksetzen", automatisches Backup der SQLite-Datei vor dem Reset (s. App-Versionshistorie 0.1.13) |
