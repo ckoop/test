@@ -7,7 +7,7 @@ services:
     container_name: timetracker-backend
     restart: unless-stopped
     volumes:
-      - /home/christian/claude/data:/data
+      - ./data:/data
     environment:
       - DATABASE_URL=sqlite:////data/timetracker.db
       # ── SMTP (ausgehende E-Mails) ──────────────────────────────────────────

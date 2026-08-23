@@ -35,7 +35,7 @@ Browser / Handy (PWA)
         ├── /api/*  ──► FastAPI :8000  (Container "backend")
         │                    │
         │               SQLite /data/timetracker.db
-        │               (persistiert via Bind-Mount /home/christian/claude/data)
+        │               (persistiert via Bind-Mount ./data, s. docker-compose.yml)
         │               + asyncio IMAP-Polling Background Task
         │
         └── /*      ──► React SPA (statische Build-Dateien)
@@ -621,7 +621,8 @@ docker compose down && docker compose up --build
 
 ### Backup
 ```bash
-tar czf backup-$(date +%Y%m%d).tar.gz -C /home/christian/claude/data .
+# im Projektverzeichnis ausführen (dort liegt ./data neben docker-compose.yml)
+tar czf backup-$(date +%Y%m%d).tar.gz -C ./data .
 ```
 
 ### API-Smoke-Tests
@@ -694,7 +695,7 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 | v4.6    | `NumberField` (Settings) ließ sich nicht unter 10 leeren/eintippen — Fallback `parseInt('') \|\| 1` schrieb bei jedem Löschen sofort wieder eine „1" rein, gefixt via erlaubtem leerem Zwischenzustand + Clamp erst bei `onBlur`. „Speichern" auf Pomodoro-/Idle-Settings-Karte navigiert jetzt per vollem Reload zurück zur Timer-Seite (`window.location.href = '/'`), damit der App-weite Pomodoro-State sofort aktuell ist |
 | v4.7    | Backup-TODO für SQLite-Datenverzeichnis ergänzt (Doku, kein Code) |
 | v4.8    | Gesperrte Nav-Items (während aktiver Pomodoro-Session) zeigen statt 🔒-Emoji eine ausgegraute Styling-Variante |
-| v4.9    | Docker-Volume durch Bind-Mount `/home/christian/claude/data` ersetzt (kein Docker-Volume mehr), Backup-Doku entsprechend angepasst |
+| v4.9    | Docker-Volume durch Bind-Mount `./data` ersetzt (kein Docker-Volume mehr), Backup-Doku entsprechend angepasst |
 | v4.10   | Nur Doku-Sync: Healthcheck-Intervall (30s→5m, Retries 3→1), API-Smoke-Tests (`backend/tests/test_api.sh`) und fehlende Versionshistorie v4.7–v4.9 ergänzt. Nachträglich: Design-Themes (frühere v4.11–v4.15) bewusst zurückgebaut auf einziges festes Design — Neongrün (`#c8f060`) bleibt, Sans-Schrift jedoch von Syne auf Archivo geändert |
 | v4.11   | Backup-TODO für SQLite-Datenverzeichnis aus der Doku entfernt — wird auf einem anderen, alternativen Weg gelöst (Doku, kein Code) |
 | v4.12   | Neue Gefahrenzone in den Settings: Datenbank auf Auslieferungszustand zurücksetzen (`POST /api/admin/reset`, `DangerZoneCard`) — löscht alle Zeiteinträge/Notizen/Mail-Log/Projekte, seedet die 6 Standardprojekte + Pomodoro-Defaults neu. Bestätigung per Eingabe von „ZURUECKSETZEN" (Frontend + serverseitig geprüft) plus zusätzlichem `window.confirm()` |
