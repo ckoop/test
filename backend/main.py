@@ -50,7 +50,7 @@ class MailLog(Base):
     id         = Column(Integer, primary_key=True, index=True)
     direction  = Column(String(10), nullable=False)   # "in" | "out"
     subject    = Column(String(500), nullable=True)
-    status     = Column(String(50), nullable=False)   # "ok" | "error" | "parsed"
+    status     = Column(String(50), nullable=False)   # "ok" | "error" | "parsed" | "skipped"
     detail     = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -949,6 +949,9 @@ def send_report(body: SendReportRequest, db: Session = Depends(get_db)):
 # Column 5 (Beschreibung) must be non-empty.
 # Lines starting with > or # are ignored (quoted replies, comments).
 # A single invalid line causes the entire mail to be rejected.
+#
+# NOTE: only the mail body is parsed. The Subject is checked separately in
+# poll_imap_once — it must contain "Zeiterfassung" or the mail is ignored.
 PIPE_RE_FULL = re.compile(
     r'(\d{4}-\d{2}-\d{2})\s*\|\s*(\d{1,2}:\d{2})\s*\|\s*(\d{1,2}:\d{2})\s*\|\s*([^|]+?)\s*\|\s*(.+)',
     re.UNICODE
@@ -1065,10 +1068,13 @@ def _log_mail(db: Session, direction: str, subject: str, status: str, detail: st
 
 
 def poll_imap_once():
-    """Synchronously poll IMAP for new messages. Called from background thread."""
+    """Synchronously poll IMAP for new messages. Called from background thread
+    and from the manual /api/mail/poll trigger. Returns a summary dict."""
+    summary = {"parsed": 0, "skipped": 0, "errors": 0}
+
     cfg = imap_cfg()
     if not cfg["host"] or not cfg["user"]:
-        return
+        return summary
 
     db = SessionLocal()
     try:
@@ -1079,11 +1085,11 @@ def poll_imap_once():
         # Search for unseen messages
         status, data = imap.search(None, "UNSEEN")
         if status != "OK":
-            imap.logout(); return
+            imap.logout(); return summary
 
         uids = data[0].split()
         if not uids:
-            imap.logout(); return
+            imap.logout(); return summary
 
         log.info(f"IMAP: {len(uids)} neue Nachricht(en)")
 
@@ -1095,6 +1101,14 @@ def poll_imap_once():
                 subject = msg.get("Subject", "(kein Betreff)")
                 date_str = msg.get("Date", "")
 
+                # Only process mails explicitly meant for Epoch — everything else
+                # in the inbox (bounces, replies, stray mail) is left untouched.
+                if "zeiterfassung" not in subject.lower():
+                    _log_mail(db, "in", subject, "skipped", "Betreff enthält nicht 'Zeiterfassung' — Mail ignoriert")
+                    imap.store(uid, "+FLAGS", "\\Seen")
+                    summary["skipped"] += 1
+                    continue
+
                 # Try to parse date from mail header, fall back to today
                 try:
                     from email.utils import parsedate_to_datetime
@@ -1102,8 +1116,7 @@ def poll_imap_once():
                 except Exception:
                     mail_date = date.today()
 
-                body      = _get_mail_text(msg)
-                full_text = subject + "\n" + body
+                full_text = _get_mail_text(msg)
                 sender    = email_lib.utils.parseaddr(msg.get("From", ""))[1]
 
                 # Parse – any error rejects the entire mail
@@ -1128,12 +1141,14 @@ def poll_imap_once():
                         except Exception as smtp_ex:
                             log.error(f"Fehler-Mail konnte nicht gesendet werden: {smtp_ex}")
                     imap.store(uid, "+FLAGS", "\\Seen")
+                    summary["errors"] += 1
                     continue
 
                 if not entries:
                     _log_mail(db, "in", subject, "error",
                               "Keine Zeiteinträge gefunden — Mail enthält keine gültigen Zeilen")
                     imap.store(uid, "+FLAGS", "\\Seen")
+                    summary["errors"] += 1
                     continue
 
                 # All entries valid – commit all at once
@@ -1149,19 +1164,27 @@ def poll_imap_once():
                 db.commit()
                 _log_mail(db, "in", subject, "parsed",
                           f"{len(entries)} Eintrag/Einträge erstellt")
-                imap.store(uid, "+FLAGS", "\\Seen")
+                # Erfolgreich verarbeitet — Mail vom Server löschen statt nur als gelesen zu markieren
+                imap.store(uid, "+FLAGS", "\\Deleted")
+                summary["parsed"] += 1
 
             except Exception as ex:
                 log.error(f"Fehler beim Verarbeiten von Mail {uid}: {ex}")
                 _log_mail(db, "in", "?", "error", str(ex))
+                summary["errors"] += 1
 
+        if summary["parsed"]:
+            imap.expunge()
         imap.logout()
     except Exception as ex:
         log.error(f"IMAP-Verbindungsfehler: {ex}")
         try: _log_mail(db, "in", "?", "error", f"Verbindung fehlgeschlagen: {ex}")
         except Exception: pass
+        summary["errors"] += 1
     finally:
         db.close()
+
+    return summary
 
 
 # ── Mail log endpoints ───────────────────────────────────────────────────────────
@@ -1169,6 +1192,12 @@ def poll_imap_once():
 @app.get("/api/mail/log", response_model=List[MailLogOut])
 def get_mail_log(limit: int = 50, db: Session = Depends(get_db)):
     return db.query(MailLog).order_by(MailLog.created_at.desc()).limit(limit).all()
+
+@app.delete("/api/mail/log")
+def clear_mail_log(db: Session = Depends(get_db)):
+    n = db.query(MailLog).delete()
+    db.commit()
+    return {"ok": True, "deleted": n}
 
 @app.get("/api/mail/config")
 def get_mail_config():
@@ -1184,10 +1213,10 @@ def get_mail_config():
 
 @app.post("/api/mail/poll")
 def trigger_poll():
-    """Manually trigger an IMAP poll (for testing)."""
+    """Manually trigger an IMAP poll."""
     try:
-        poll_imap_once()
-        return {"ok": True}
+        summary = poll_imap_once()
+        return {"ok": True, **summary}
     except Exception as ex:
         raise HTTPException(500, str(ex))
 

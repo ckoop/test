@@ -252,8 +252,9 @@ timetracker/
 |--------|-----------------------|---------------------------------------|
 | POST   | /api/mail/send-report | Body: `{ day, recipient? }`           |
 | GET    | /api/mail/log         | Query: `limit` (default 50)           |
+| DELETE | /api/mail/log         | Löscht gesamten Mail-Log unwiderruflich |
 | GET    | /api/mail/config      | Sanitisierte Konfig (ohne Passwörter) |
-| POST   | /api/mail/poll        | Manuellen IMAP-Poll triggern          |
+| POST   | /api/mail/poll        | Manuellen IMAP-Poll triggern, gibt `{ok, parsed, skipped, errors}` zurück |
 
 ### Pomodoro
 | Method | Path                    | Beschreibung                                                          |
@@ -291,7 +292,7 @@ IMAP_PORT=993
 IMAP_USER=epoch@example.com
 IMAP_PASSWORD=secret
 IMAP_FOLDER=INBOX
-IMAP_POLL_INTERVAL=300     # Sekunden (Standard: 5 Min)
+IMAP_POLL_INTERVAL=3600    # Sekunden — Backup; primärer Weg ist der manuelle "Jetzt abrufen"-Button
 ```
 
 Alle Variablen optional — fehlen Credentials, ist Mail deaktiviert.
@@ -475,7 +476,10 @@ Vorschau (`<pre>`, kopierbar über `navigator.clipboard`) und `.txt`-Download (c
 - Button auf Timer-Seite + dedizierte Mail-Seite
 - HTML-Tagesreport: Tabelle mit Datum | Start | Ende | Projekt | Beschreibung
 
-### Eingehend (IMAP) — Pflichtformat
+### Eingehend (IMAP) — Betreff-Pflicht
+Betreff muss `Zeiterfassung` enthalten (Groß-/Kleinschreibung egal), sonst wird die Mail komplett ignoriert (Status `skipped` im Mail-Log, kein Fehler-Reply). So verarbeitet Epoch keine fremde Post im dedizierten Postfach (Bounces, Antworten, Spam).
+
+### Eingehend (IMAP) — Pflichtformat (Body)
 ```
 Datum      | Start | Ende  | Projekt     | Beschreibung
 2026-06-01 | 09:00 | 10:00 | Support     | Planung Roadmap Q3
@@ -483,6 +487,8 @@ Datum      | Start | Ende  | Projekt     | Beschreibung
 ```
 **Alle 5 Spalten Pflicht.** Beschreibung darf nicht leer sein.
 Zeilen mit `>` oder `#` werden ignoriert.
+
+Erfolgreich verarbeitete Mails (`parsed`) werden auf dem IMAP-Server per `\Deleted`-Flag + `expunge()` endgültig gelöscht statt nur als gelesen markiert. Mails mit `skipped`/`error`-Status bleiben im Postfach (als gelesen markiert) für Debugging erhalten.
 
 ### Fehlerbehandlung — Alles-oder-nichts
 Bei einer einzigen ungültigen Zeile:
@@ -650,8 +656,8 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 - **Fix/Kleinigkeit ohne neues Feature** → nur PATCH hoch (z.B. `0.2.0` → `0.2.1`)
 - **MAJOR** (`1.0.0` etc.) → nie eigenmächtig, vorher immer beim Nutzer nachfragen
 
-**Aktuelle App-Version: 0.3.0**
-**Aktuelle Doku-Version: v4.16**
+**Aktuelle App-Version: 0.4.0**
+**Aktuelle Doku-Version: v4.17**
 
 ### App-Versionshistorie
 
@@ -661,6 +667,7 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 | 0.1.13  | Gefahrenzone-Karte umbenannt zu „Datenbank zurücksetzen" (kein Warndreieck/„Gefahrenzone"-Framing mehr). `POST /api/admin/reset` sichert die bestehende SQLite-Datei jetzt automatisch vor dem Zurücksetzen als Zeitstempel-Kopie (`timetracker_backup_<YYYYMMDD_HHMMSS>.db`) im selben Datenverzeichnis |
 | 0.2.0   | Beschreibungs-Autocomplete: neuer Endpoint `GET /api/entries/descriptions` (Projekt-gefiltert, sortiert nach Häufigkeit/Aktualität), natives `<datalist>` an allen drei Beschreibungs-Feldern (Timer-Start, manueller Eintrag, Eintrag bearbeiten) |
 | 0.3.0   | Rotes Favicon in der lokalen Dev-Umgebung zur Unterscheidung von Produktion (grün): `favicon-dev.svg`, Umschaltung in `main.jsx` bei `import.meta.env.DEV` (Vite-Dev-Server) **oder** `VITE_APP_ENV === 'development'` (Docker-Build). Neues Dockerfile-`ARG APP_ENV` (Default `production`), lokal per gitignorter `docker-compose.override.yml` auf `development` gesetzt — landet nie auf dem Server |
+| 0.4.0   | Mail-Import: eingehende Mails werden nur noch verarbeitet, wenn der Betreff „Zeiterfassung" enthält (sonst Status `skipped`, kein Fehler-Reply) — schützt das dedizierte Postfach vor fremder Post. Erfolgreich verarbeitete Mails werden per `\Deleted`+`expunge()` vom IMAP-Server gelöscht statt nur als gelesen markiert. `POST /api/mail/poll` liefert jetzt `{parsed, skipped, errors}`, der „Jetzt abrufen"-Button zeigt das Ergebnis direkt an. Neuer `DELETE /api/mail/log`-Endpoint + „Log löschen"-Button (mit `window.confirm()`). `IMAP_POLL_INTERVAL`-Default auf 3600s (1h) als Backup erhöht — primärer Weg ist der manuelle Button |
 
 ### Doku-Versionshistorie
 
@@ -695,3 +702,4 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 | v4.14   | Gefahrenzone-Karte in den Settings umbenannt zu „Datenbank zurücksetzen", automatisches Backup der SQLite-Datei vor dem Reset (s. App-Versionshistorie 0.1.13) |
 | v4.15   | Beschreibungs-Autocomplete für Timer-Start/manuellen Eintrag/Eintrag bearbeiten, neuer Abschnitt „Beschreibungs-Autocomplete" (s. App-Versionshistorie 0.2.0) |
 | v4.16   | Rotes Dev-Favicon zur Unterscheidung von der Produktivumgebung, `docker-compose.override.yml`-Mechanismus im Abschnitt „Docker Multi-Stage (Frontend)" ergänzt (s. App-Versionshistorie 0.3.0) |
+| v4.17   | Mail-Import: Betreff-Pflicht „Zeiterfassung", Server-seitiges Löschen nach erfolgreicher Verarbeitung, Poll-Ergebnis-Feedback, Mail-Log löschbar (s. App-Versionshistorie 0.4.0) |

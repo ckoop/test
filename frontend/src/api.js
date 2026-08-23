@@ -53,6 +53,7 @@ export const api = {
   // Mail
   sendReport:    (data) => req('/mail/send-report', { method: 'POST', body: JSON.stringify(data) }),
   getMailLog:    (limit = 50) => req(`/mail/log?limit=${limit}`),
+  clearMailLog:  () => req('/mail/log', { method: 'DELETE' }),
   getMailConfig: () => req('/mail/config'),
   triggerPoll:   () => req('/mail/poll', { method: 'POST' }),
 

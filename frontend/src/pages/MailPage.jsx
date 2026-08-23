@@ -15,6 +15,7 @@ export default function MailPage() {
   const [sendResult, setSendResult] = useState(null)
   const [polling, setPolling]     = useState(false)
   const [pollResult, setPollResult] = useState(null)
+  const [clearingLog, setClearingLog] = useState(false)
 
   const load = useCallback(() => {
     api.getMailConfig().then(setConfig).catch(() => {})
@@ -40,13 +41,31 @@ export default function MailPage() {
   const handlePoll = async () => {
     setPolling(true); setPollResult(null)
     try {
-      await api.triggerPoll()
-      setPollResult({ ok: true, msg: 'Postfach abgerufen' })
-      setTimeout(() => { load(); setPollResult(null) }, 1500)
+      const res = await api.triggerPoll()
+      const parts = []
+      if (res.parsed)  parts.push(`${res.parsed} importiert`)
+      if (res.skipped) parts.push(`${res.skipped} ignoriert`)
+      if (res.errors)  parts.push(`${res.errors} Fehler`)
+      const msg = parts.length ? parts.join(' · ') : 'Keine neuen Mails'
+      setPollResult({ ok: !res.errors, msg })
+      setTimeout(() => { load(); setPollResult(null) }, res.errors ? 4000 : 1500)
     } catch (e) {
       setPollResult({ ok: false, msg: e.message })
     } finally {
       setPolling(false)
+    }
+  }
+
+  const handleClearLog = async () => {
+    if (!window.confirm('Mail-Log wirklich unwiderruflich löschen?')) return
+    setClearingLog(true)
+    try {
+      await api.clearMailLog()
+      load()
+    } catch (e) {
+      window.alert(`Löschen fehlgeschlagen: ${e.message}`)
+    } finally {
+      setClearingLog(false)
     }
   }
 
@@ -134,22 +153,31 @@ export default function MailPage() {
           Schicke eine E-Mail an <strong style={{ color: 'var(--text)', fontFamily: 'var(--font-mono)' }}>{config?.imap?.user || 'deine-imap-adresse'}</strong>. Jede Zeile im Body wird als Zeiteintrag geparst:
         </div>
         <div style={{ background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 'var(--r)', padding: '12px 14px', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-2)', lineHeight: 2 }}>
-          <div><span style={{ color: 'var(--accent)' }}>09:00-10:30</span> Meeting Sprint Planning</div>
-          <div><span style={{ color: 'var(--accent)' }}>10:45-13:15</span> Entwicklung Auth-System</div>
-          <div><span style={{ color: 'var(--accent)' }}>14:00-15:00</span> Allgemein</div>
-          <div style={{ marginTop: 8, color: 'var(--text-3)' }}># Mit explizitem Datum:</div>
-          <div><span style={{ color: 'rgba(200,240,96,.6)' }}>2026-06-01</span> <span style={{ color: 'var(--accent)' }}>09:00-10:00</span> Planung Roadmap</div>
+          <div style={{ color: 'var(--text-3)' }}>Datum      | Start | Ende  | Projekt     | Beschreibung</div>
+          <div><span style={{ color: 'rgba(200,240,96,.6)' }}>2026-06-01</span> | <span style={{ color: 'var(--accent)' }}>09:00</span> | <span style={{ color: 'var(--accent)' }}>10:00</span> | Support     | Planung Roadmap Q3</div>
+          <div><span style={{ color: 'rgba(200,240,96,.6)' }}>2026-06-01</span> | <span style={{ color: 'var(--accent)' }}>10:30</span> | <span style={{ color: 'var(--accent)' }}>12:00</span> | Entwicklung | Auth-System</div>
         </div>
         <div style={{ marginTop: 10, fontSize: 11, color: 'var(--text-3)', lineHeight: 1.8 }}>
-          Projekte: <span style={{ fontFamily: 'var(--font-mono)' }}>Allgemein · Entwicklung · Meeting · Planung · Support · Dokumentation</span><br/>
-          Das Datum der Mail wird verwendet, wenn kein explizites Datum angegeben ist.
+          Alle 5 Spalten sind Pflicht, Beschreibung darf nicht leer sein. Eine einzige ungültige Zeile lehnt die gesamte Mail ab.<br/>
+          Zeilen mit <span style={{ fontFamily: 'var(--font-mono)' }}>&gt;</span> oder <span style={{ fontFamily: 'var(--font-mono)' }}>#</span> werden ignoriert.<br/>
+          Der Betreff muss <span style={{ fontFamily: 'var(--font-mono)' }}>Zeiterfassung</span> enthalten, sonst wird die Mail nicht verarbeitet.
         </div>
       </div>
 
       {/* Mail log */}
       {log.length > 0 && (
         <div>
-          <div className="label" style={{ marginBottom: 9 }}>Log</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
+            <div className="label">Log</div>
+            <button
+              className="btn btn-ghost"
+              style={{ fontSize: 10, padding: '3px 8px' }}
+              onClick={handleClearLog}
+              disabled={clearingLog}
+            >
+              {clearingLog ? '…' : '✕ Log löschen'}
+            </button>
+          </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             {log.map(entry => (
               <LogRow key={entry.id} entry={entry} />
@@ -174,11 +202,8 @@ function StatusCard({ label, ok, detail }) {
         <div style={{ width: 6, height: 6, borderRadius: '50%', background: ok ? 'var(--accent)' : 'var(--text-3)', flexShrink: 0 }} />
         <div className="label">{label}</div>
       </div>
-      <div style={{ fontSize: 11, color: ok ? 'var(--accent)' : 'var(--text-3)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {ok ? '● OK' : '○ nicht konfiguriert'}
-      </div>
       <div style={{ fontSize: 10, color: 'var(--text-3)', fontFamily: 'var(--font-mono)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {detail}
+        {ok ? detail : 'nicht konfiguriert'}
       </div>
     </div>
   )
@@ -195,7 +220,7 @@ function MiniStat({ label, value, accent }) {
 
 function LogRow({ entry }) {
   const isIn = entry.direction === 'in'
-  const isOk = entry.status === 'ok' || entry.status === 'parsed'
+  const isOk = entry.status === 'ok' || entry.status === 'parsed' || entry.status === 'skipped'
   const time = dayjs(entry.created_at + (entry.created_at.endsWith('Z') ? '' : 'Z')).format('DD.MM HH:mm')
 
   return (
