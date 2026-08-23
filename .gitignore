@@ -17,5 +17,8 @@ node_modules/
 __pycache__/
 *.pyc
 
+# Lokal-nur: markiert den Dev-Build (rotes Favicon), darf nie auf den Server
+docker-compose.override.yml
+
 # OS
 .DS_Store

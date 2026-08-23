@@ -4,7 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import './index.css'
 
-if (import.meta.env.DEV) {
+if (import.meta.env.DEV || import.meta.env.VITE_APP_ENV === 'development') {
   const favicon = document.querySelector('link[rel="icon"]')
   if (favicon) favicon.href = '/favicon-dev.svg'
 }

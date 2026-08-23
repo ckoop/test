@@ -3,6 +3,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+ARG APP_ENV=production
+ENV VITE_APP_ENV=$APP_ENV
 RUN npm run build
 
 FROM nginx:alpine
