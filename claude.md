@@ -81,7 +81,8 @@ timetracker/
     ├── index.html                   # PWA meta tags
     ├── public/
     │   ├── manifest.json
-    │   └── favicon.svg               # Uhr-Icon (Accent-Grün auf dunklem Grund), gleiche Formsprache wie IcoTimer
+    │   ├── favicon.svg               # Uhr-Icon (Accent-Grün auf dunklem Grund), gleiche Formsprache wie IcoTimer
+    │   └── favicon-dev.svg           # Gleiche Form, Rot statt Grün — nur lokal aktiv (s. „Docker Multi-Stage")
     └── src/
         ├── main.jsx
         ├── App.jsx                  # Routing + BottomNav (7 Tabs)
@@ -560,6 +561,8 @@ FROM node:20-alpine AS builder   # npm ci + vite build
 FROM nginx:alpine                 # nur dist/ + nginx.conf
 ```
 
+**Dev-vs-Prod-Favicon:** Build-`ARG APP_ENV` (Default `production`) wird als `VITE_APP_ENV` in den Vite-Build eingebacken. Lokal setzt eine **gitignorte** `docker-compose.override.yml` (wird von Docker Compose automatisch mitgeladen, sobald sie neben `docker-compose.yml` liegt) `APP_ENV: development` für den `frontend`-Build — dadurch zeigt der Tab lokal ein rotes statt das neongrüne Favicon (`favicon-dev.svg`). Die Override-Datei landet nie im Git-Verlauf und wird von `sync_to_server.sh` (nutzt `.gitignore` als rsync-Exclude-Liste) nie mitkopiert, der Server baut also immer mit `APP_ENV=production`.
+
 ---
 
 ## Bekannte Einschränkungen
@@ -647,8 +650,8 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 - **Fix/Kleinigkeit ohne neues Feature** → nur PATCH hoch (z.B. `0.2.0` → `0.2.1`)
 - **MAJOR** (`1.0.0` etc.) → nie eigenmächtig, vorher immer beim Nutzer nachfragen
 
-**Aktuelle App-Version: 0.2.0**
-**Aktuelle Doku-Version: v4.15**
+**Aktuelle App-Version: 0.3.0**
+**Aktuelle Doku-Version: v4.16**
 
 ### App-Versionshistorie
 
@@ -657,6 +660,7 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 | 0.1.12  | Startpunkt der eigenständigen App-Versionierung (vorher gemeinsam mit der Doku-Version gezählt, zuletzt als „v4.12"). Kein Code-Unterschied zum vorherigen Stand — reine Umstellung der Zählweise |
 | 0.1.13  | Gefahrenzone-Karte umbenannt zu „Datenbank zurücksetzen" (kein Warndreieck/„Gefahrenzone"-Framing mehr). `POST /api/admin/reset` sichert die bestehende SQLite-Datei jetzt automatisch vor dem Zurücksetzen als Zeitstempel-Kopie (`timetracker_backup_<YYYYMMDD_HHMMSS>.db`) im selben Datenverzeichnis |
 | 0.2.0   | Beschreibungs-Autocomplete: neuer Endpoint `GET /api/entries/descriptions` (Projekt-gefiltert, sortiert nach Häufigkeit/Aktualität), natives `<datalist>` an allen drei Beschreibungs-Feldern (Timer-Start, manueller Eintrag, Eintrag bearbeiten) |
+| 0.3.0   | Rotes Favicon in der lokalen Dev-Umgebung zur Unterscheidung von Produktion (grün): `favicon-dev.svg`, Umschaltung in `main.jsx` bei `import.meta.env.DEV` (Vite-Dev-Server) **oder** `VITE_APP_ENV === 'development'` (Docker-Build). Neues Dockerfile-`ARG APP_ENV` (Default `production`), lokal per gitignorter `docker-compose.override.yml` auf `development` gesetzt — landet nie auf dem Server |
 
 ### Doku-Versionshistorie
 
@@ -690,3 +694,4 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 | v4.13   | App-Version und Doku-Version entkoppelt (s. „Versionierung" oben) — Doku-only-Änderungen zählen ab jetzt nur noch diesen `v4.x`-Zähler hoch, nicht mehr `APP_VERSION` |
 | v4.14   | Gefahrenzone-Karte in den Settings umbenannt zu „Datenbank zurücksetzen", automatisches Backup der SQLite-Datei vor dem Reset (s. App-Versionshistorie 0.1.13) |
 | v4.15   | Beschreibungs-Autocomplete für Timer-Start/manuellen Eintrag/Eintrag bearbeiten, neuer Abschnitt „Beschreibungs-Autocomplete" (s. App-Versionshistorie 0.2.0) |
+| v4.16   | Rotes Dev-Favicon zur Unterscheidung von der Produktivumgebung, `docker-compose.override.yml`-Mechanismus im Abschnitt „Docker Multi-Stage (Frontend)" ergänzt (s. App-Versionshistorie 0.3.0) |
