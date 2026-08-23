@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, Text, Date, Boolean
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Float, Text, Date, Boolean, func, desc
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from pydantic import BaseModel
 from datetime import datetime, date, timedelta
@@ -584,6 +584,14 @@ def get_entries(from_date: Optional[date]=None, to_date: Optional[date]=None, db
     if from_date: q = q.filter(TimeEntry.date >= from_date)
     if to_date:   q = q.filter(TimeEntry.date <= to_date)
     return q.order_by(TimeEntry.date.desc(), TimeEntry.start_time.desc()).all()
+
+@app.get("/api/entries/descriptions", response_model=List[str])
+def get_description_suggestions(project: Optional[str] = None, limit: int = 15, db: Session = Depends(get_db)):
+    q = db.query(TimeEntry.description, func.count(TimeEntry.id).label("cnt"), func.max(TimeEntry.date).label("last"))
+    q = q.filter(TimeEntry.description != None, TimeEntry.description != "")
+    if project: q = q.filter(TimeEntry.project == project)
+    q = q.group_by(TimeEntry.description).order_by(desc("cnt"), desc("last")).limit(limit)
+    return [row[0] for row in q.all()]
 
 
 # ── Day / Week ──────────────────────────────────────────────────────────────────

@@ -153,6 +153,11 @@ expect_status "Eintraege des Tages abrufen" 200
 echo "$BODY_OUT" | jq -e ".[] | select(.id == $ENTRY_ID)" >/dev/null 2>&1
 check "Neuer Eintrag in Tagesliste sichtbar" "$?"
 
+curl_json GET "/entries/descriptions?project=$TEST_PROJECT"
+expect_status "Beschreibungs-Vorschlaege abrufen" 200
+echo "$BODY_OUT" | jq -e 'index("Testeintrag geaendert") != null' >/dev/null 2>&1
+check "Geaenderte Beschreibung taucht in Vorschlaegen auf" "$?"
+
 # ── 4. Tag / Woche / Notiz ───────────────────────────────────────────────────
 
 echo "== Tag / Woche / Notiz =="

@@ -210,6 +210,7 @@ timetracker/
 | PUT    | /api/entries/{id}    | Eintrag bearbeiten                     |
 | DELETE | /api/entries/{id}    | Eintrag löschen                        |
 | GET    | /api/entries         | Query: `from_date`, `to_date`          |
+| GET    | /api/entries/descriptions | Query: `project?`, `limit` (Default 15). Distinkte `description`-Werte, sortiert nach Häufigkeit dann Aktualität (letztes Datum) — Datengrundlage für Autocomplete-Vorschläge |
 
 ### Tag / Woche
 | Method | Path           | Beschreibung                               |
@@ -516,6 +517,12 @@ Bei einer einzigen ungültigen Zeile:
 
 ---
 
+## Beschreibungs-Autocomplete
+
+Alle drei Beschreibungs-Felder (Timer-Start, manueller Eintrag, Eintrag bearbeiten — alle in `TimerPage.jsx`) nutzen ein natives HTML `<datalist>`, gespeist über `useDescriptionSuggestions(project)`. Der Hook ruft bei jeder Änderung von `project` `GET /api/entries/descriptions?project=...` neu ab und schlägt so die häufigsten (dann aktuellsten) bisher für dieses Projekt verwendeten Beschreibungen vor — bewusst kein Custom-Dropdown-Widget, da der Browser Filterung/Tastaturnavigation bereits kostenlos mitbringt.
+
+---
+
 ## Wichtige Implementierungsdetails
 
 ### Zeitdarstellung
@@ -630,13 +637,18 @@ cd frontend && npm install && npm run dev
 
 Es gibt **zwei getrennte Versionszähler**, die bewusst unterschiedlich oft hochgezählt werden:
 
-- **App-Version** (`APP_VERSION` in `frontend/src/App.jsx`, sichtbar in der Sidebar) — Semver-artig `0.1.x`, wird **nur bei echten Code-/Feature-Änderungen** hochgezählt, nicht bei reinen Doku-Korrekturen.
+- **App-Version** (`APP_VERSION` in `frontend/src/App.jsx`, sichtbar in der Sidebar) — echtes Semver `MAJOR.MINOR.PATCH`, wird **nur bei echten Code-/Feature-Änderungen** hochgezählt, nicht bei reinen Doku-Korrekturen.
 - **Doku-Version** (diese Datei) — die alte `v4.x`-Zählung, läuft unverändert weiter und wird bei **jeder** Änderung an `claude.md` hochgezählt, egal ob reine Doku-Korrektur oder Begleitdoku zu einem Feature.
 
 Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Zähler). Ab hier laufen sie auseinander — `v4.12` ist der letzte gemeinsame Stand, `0.1.12` der Startpunkt der neuen eigenständigen App-Version.
 
-**Aktuelle App-Version: 0.1.13**
-**Aktuelle Doku-Version: v4.14**
+**Semver-Regel für die App-Version (ab `0.2.0`):**
+- **Neues Feature** → MINOR hoch, PATCH auf `0` zurück (z.B. `0.1.13` → `0.2.0`)
+- **Fix/Kleinigkeit ohne neues Feature** → nur PATCH hoch (z.B. `0.2.0` → `0.2.1`)
+- **MAJOR** (`1.0.0` etc.) → nie eigenmächtig, vorher immer beim Nutzer nachfragen
+
+**Aktuelle App-Version: 0.2.0**
+**Aktuelle Doku-Version: v4.15**
 
 ### App-Versionshistorie
 
@@ -644,6 +656,7 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 |---------|------------|
 | 0.1.12  | Startpunkt der eigenständigen App-Versionierung (vorher gemeinsam mit der Doku-Version gezählt, zuletzt als „v4.12"). Kein Code-Unterschied zum vorherigen Stand — reine Umstellung der Zählweise |
 | 0.1.13  | Gefahrenzone-Karte umbenannt zu „Datenbank zurücksetzen" (kein Warndreieck/„Gefahrenzone"-Framing mehr). `POST /api/admin/reset` sichert die bestehende SQLite-Datei jetzt automatisch vor dem Zurücksetzen als Zeitstempel-Kopie (`timetracker_backup_<YYYYMMDD_HHMMSS>.db`) im selben Datenverzeichnis |
+| 0.2.0   | Beschreibungs-Autocomplete: neuer Endpoint `GET /api/entries/descriptions` (Projekt-gefiltert, sortiert nach Häufigkeit/Aktualität), natives `<datalist>` an allen drei Beschreibungs-Feldern (Timer-Start, manueller Eintrag, Eintrag bearbeiten) |
 
 ### Doku-Versionshistorie
 
@@ -676,3 +689,4 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 | v4.12   | Neue Gefahrenzone in den Settings: Datenbank auf Auslieferungszustand zurücksetzen (`POST /api/admin/reset`, `DangerZoneCard`) — löscht alle Zeiteinträge/Notizen/Mail-Log/Projekte, seedet die 6 Standardprojekte + Pomodoro-Defaults neu. Bestätigung per Eingabe von „ZURUECKSETZEN" (Frontend + serverseitig geprüft) plus zusätzlichem `window.confirm()` |
 | v4.13   | App-Version und Doku-Version entkoppelt (s. „Versionierung" oben) — Doku-only-Änderungen zählen ab jetzt nur noch diesen `v4.x`-Zähler hoch, nicht mehr `APP_VERSION` |
 | v4.14   | Gefahrenzone-Karte in den Settings umbenannt zu „Datenbank zurücksetzen", automatisches Backup der SQLite-Datei vor dem Reset (s. App-Versionshistorie 0.1.13) |
+| v4.15   | Beschreibungs-Autocomplete für Timer-Start/manuellen Eintrag/Eintrag bearbeiten, neuer Abschnitt „Beschreibungs-Autocomplete" (s. App-Versionshistorie 0.2.0) |

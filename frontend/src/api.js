@@ -27,6 +27,7 @@ export const api = {
   createManual: (data) => req('/entries/manual', { method: 'POST', body: JSON.stringify(data) }),
   updateEntry:  (id, data) => req(`/entries/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteEntry:  (id) => req(`/entries/${id}`, { method: 'DELETE' }),
+  getDescriptionSuggestions: (project) => req('/entries/descriptions' + (project ? `?project=${encodeURIComponent(project)}` : '')),
 
   // Day / Week
   getDay:  (day)   => req(`/day/${day}`),

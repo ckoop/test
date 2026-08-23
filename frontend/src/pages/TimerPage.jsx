@@ -11,6 +11,14 @@ dayjs.locale('de')
 
 const MOODS    = ['😞', '😕', '😐', '🙂', '😄']
 
+function useDescriptionSuggestions(project) {
+  const [suggestions, setSuggestions] = useState([])
+  useEffect(() => {
+    api.getDescriptionSuggestions(project).then(setSuggestions).catch(() => {})
+  }, [project])
+  return suggestions
+}
+
 export default function TimerPage({ activeTimer, setActiveTimer, pomodoro, pip }) {
   const [project, setProject]       = useState('Allgemein')
   const [description, setDescription] = useState('')
@@ -202,13 +210,17 @@ function RunningTimer({ activeTimer, elapsed, isPaused, onStop, onPause, onResum
 }
 
 function StartTimer({ project, setProject, description, setDescription, onStart, loading, projectNames, pomodoroEnabled, onStartPomodoro }) {
+  const suggestions = useDescriptionSuggestions(project)
   return (
     <div>
       <div className="label" style={{ marginBottom: 10 }}>Neuer Eintrag</div>
       <select value={project} onChange={e => setProject(e.target.value)} style={{ marginBottom: 9 }}>
         {projectNames.map(p => <option key={p}>{p}</option>)}
       </select>
-      <input type="text" placeholder="Woran arbeitest du? (optional)" value={description} onChange={e => setDescription(e.target.value)} onKeyDown={e => e.key === 'Enter' && onStart()} style={{ marginBottom: 12 }} />
+      <input type="text" placeholder="Woran arbeitest du? (optional)" value={description} onChange={e => setDescription(e.target.value)} onKeyDown={e => e.key === 'Enter' && onStart()} list="desc-suggestions-start" style={{ marginBottom: 12 }} />
+      <datalist id="desc-suggestions-start">
+        {suggestions.map(s => <option key={s} value={s} />)}
+      </datalist>
       <div style={{ display: 'flex', gap: 8 }}>
         <button className="btn btn-primary" style={{ flex: 1 }} onClick={onStart} disabled={loading}>
           {loading ? '…' : '▶ Timer starten'}
@@ -318,6 +330,7 @@ function ManualEntryModal({ defaultDate, onClose, onSaved }) {
   const [error, setError]       = useState(null)
   const [loading, setLoading]   = useState(false)
   const { names: projectNames } = useProjectNames()
+  const suggestions = useDescriptionSuggestions(project)
 
   const handleSave = async () => {
     setError(null); setLoading(true)
@@ -356,7 +369,10 @@ function ManualEntryModal({ defaultDate, onClose, onSaved }) {
           </div>
           <div>
             <div className="label" style={{ marginBottom: 5 }}>Beschreibung</div>
-            <input type="text" placeholder="Optional" value={desc} onChange={e => setDesc(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} />
+            <input type="text" placeholder="Optional" value={desc} onChange={e => setDesc(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} list="desc-suggestions-manual" />
+            <datalist id="desc-suggestions-manual">
+              {suggestions.map(s => <option key={s} value={s} />)}
+            </datalist>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
             <button className="btn btn-ghost" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose}>Abbrechen</button>
@@ -383,6 +399,7 @@ function EditEntryModal({ entry, onClose, onSaved }) {
   const [error, setError]     = useState(null)
   const [loading, setLoading] = useState(false)
   const { names: projectNames } = useProjectNames()
+  const suggestions = useDescriptionSuggestions(project)
 
   const handleSave = async () => {
     setError(null); setLoading(true)
@@ -417,7 +434,10 @@ function EditEntryModal({ entry, onClose, onSaved }) {
           </div>
           <div>
             <div className="label" style={{ marginBottom: 5 }}>Beschreibung</div>
-            <input type="text" placeholder="Optional" value={desc} onChange={e => setDesc(e.target.value)} />
+            <input type="text" placeholder="Optional" value={desc} onChange={e => setDesc(e.target.value)} list="desc-suggestions-edit" />
+            <datalist id="desc-suggestions-edit">
+              {suggestions.map(s => <option key={s} value={s} />)}
+            </datalist>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
             <button className="btn btn-ghost" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose}>Abbrechen</button>
