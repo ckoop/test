@@ -1,25 +1,31 @@
 import { useState } from 'react'
 import { api } from '../api'
 import { useProjectNames, useDescriptionSuggestions } from '../hooks/useProjects'
-import { localTimeToUTC } from '../hooks/useTimer'
+import { localTimeToUTC, utcToLocalTime } from '../hooks/useTimer'
 
-export function ManualEntryModal({ defaultDate, onClose, onSaved }) {
-  const { names: projectNames } = useProjectNames()
-  const [date, setDate]       = useState(defaultDate)
-  const [start, setStart]     = useState('09:00')
-  const [end, setEnd]         = useState('10:00')
-  const [project, setProject] = useState('Allgemein')
-  const [desc, setDesc]       = useState('')
+function localDateOf(isoStr) {
+  const d = new Date(isoStr.endsWith('Z') ? isoStr : isoStr + 'Z')
+  const pad = n => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+export function EditEntryModal({ entry, onClose, onSaved }) {
+  const [start, setStart]     = useState(utcToLocalTime(entry.start_time))
+  const [end, setEnd]         = useState(utcToLocalTime(entry.end_time))
+  const [project, setProject] = useState(entry.project || 'Allgemein')
+  const [desc, setDesc]       = useState(entry.description || '')
   const [error, setError]     = useState(null)
   const [loading, setLoading] = useState(false)
+  const { names: projectNames } = useProjectNames()
   const suggestions = useDescriptionSuggestions(project)
 
   const handleSave = async () => {
     setError(null); setLoading(true)
     try {
-      const startUtc = localTimeToUTC(date, start)
-      const endUtc   = localTimeToUTC(date, end)
-      await api.createManual({ date: startUtc.date, start_time: startUtc.time, end_time: endUtc.time, project, description: desc || undefined })
+      const day      = localDateOf(entry.start_time)
+      const startUtc = localTimeToUTC(day, start)
+      const endUtc   = localTimeToUTC(day, end)
+      await api.updateEntry(entry.id, { start_time: startUtc.time, end_time: endUtc.time, project, description: desc })
       onSaved()
     } catch (err) { setError(err.message) }
     finally { setLoading(false) }
@@ -28,13 +34,9 @@ export function ManualEntryModal({ defaultDate, onClose, onSaved }) {
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal">
-        <div className="modal-title">Eintrag hinzufügen</div>
+        <div className="modal-title">Eintrag bearbeiten</div>
         {error && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 12 }}>{error}</div>}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div>
-            <div className="label" style={{ marginBottom: 5 }}>Datum</div>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} />
-          </div>
           <div className="grid2">
             <div>
               <div className="label" style={{ marginBottom: 5 }}>Von</div>
@@ -53,8 +55,8 @@ export function ManualEntryModal({ defaultDate, onClose, onSaved }) {
           </div>
           <div>
             <div className="label" style={{ marginBottom: 5 }}>Beschreibung</div>
-            <input type="text" placeholder="Optional" value={desc} onChange={e => setDesc(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} list="desc-suggestions-manual" />
-            <datalist id="desc-suggestions-manual">
+            <input type="text" placeholder="Optional" value={desc} onChange={e => setDesc(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSave()} list="desc-suggestions-edit" />
+            <datalist id="desc-suggestions-edit">
               {suggestions.map(s => <option key={s} value={s} />)}
             </datalist>
           </div>

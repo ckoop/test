@@ -41,3 +41,12 @@ export function useProjectNames() {
   const { projects, loading } = useProjects()
   return { names: projects.map(p => p.name), projects, loading }
 }
+
+// Recent description suggestions for a given project, for datalist autocomplete
+export function useDescriptionSuggestions(project) {
+  const [suggestions, setSuggestions] = useState([])
+  useEffect(() => {
+    api.getDescriptionSuggestions(project).then(setSuggestions).catch(() => {})
+  }, [project])
+  return suggestions
+}

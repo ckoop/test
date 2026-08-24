@@ -6,6 +6,7 @@ import { api } from '../api'
 import { fmtMinutes, fmtTime } from '../hooks/useTimer'
 import OvertimeBanner from './OvertimeBanner'
 import { ManualEntryModal } from './ManualEntryModal'
+import { EditEntryModal } from './EditEntryModal'
 
 dayjs.extend(isoWeek)
 dayjs.locale('de')
@@ -115,6 +116,7 @@ export default function WeekPage() {
 
 function DayCard({ day, today, onAddManual, onRefresh }) {
   const [expanded, setExpanded] = useState(false)
+  const [showEdit, setShowEdit] = useState(null) // entry to edit
   const d = dayjs(day.date)
   const isToday   = day.date === today
   const isWeekend = d.day() === 0 || d.day() === 6
@@ -148,12 +150,22 @@ function DayCard({ day, today, onAddManual, onRefresh }) {
               {e.source === 1 && <span className="tag tag-m">manuell</span>}{e.source === 2 && <span className="tag" style={{background:"rgba(255,170,0,.12)",color:"#ffaa00"}}>E-Mail</span>}
               {e.description && <span style={{ fontSize: 10, color: 'var(--text2)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.description}</span>}
               <span className="mono" style={{ fontSize: 10, flexShrink: 0 }}>{fmtMinutes(e.duration_minutes)}</span>
-              <button className="btn-icon" onClick={() => api.deleteEntry(e.id).then(onRefresh)}>
+              <button className="btn-icon" onClick={() => setShowEdit(e)} title="Bearbeiten">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+              <button className="btn-icon" onClick={() => api.deleteEntry(e.id).then(onRefresh)} title="Löschen">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6l-1 14H6L5 6"/></svg>
               </button>
             </div>
           ))}
         </div>
+      )}
+      {showEdit && (
+        <EditEntryModal
+          entry={showEdit}
+          onClose={() => setShowEdit(null)}
+          onSaved={() => { setShowEdit(null); onRefresh() }}
+        />
       )}
     </div>
   )

@@ -657,8 +657,8 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 - **Fix/Kleinigkeit ohne neues Feature** → nur PATCH hoch (z.B. `0.2.0` → `0.2.1`)
 - **MAJOR** (`1.0.0` etc.) → nie eigenmächtig, vorher immer beim Nutzer nachfragen
 
-**Aktuelle App-Version: 0.4.0**
-**Aktuelle Doku-Version: v4.17**
+**Aktuelle App-Version: 0.4.1**
+**Aktuelle Doku-Version: v4.18**
 
 ### App-Versionshistorie
 
@@ -669,6 +669,7 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 | 0.2.0   | Beschreibungs-Autocomplete: neuer Endpoint `GET /api/entries/descriptions` (Projekt-gefiltert, sortiert nach Häufigkeit/Aktualität), natives `<datalist>` an allen drei Beschreibungs-Feldern (Timer-Start, manueller Eintrag, Eintrag bearbeiten) |
 | 0.3.0   | Rotes Favicon in der lokalen Dev-Umgebung zur Unterscheidung von Produktion (grün): `favicon-dev.svg`, Umschaltung in `main.jsx` bei `import.meta.env.DEV` (Vite-Dev-Server) **oder** `VITE_APP_ENV === 'development'` (Docker-Build). Neues Dockerfile-`ARG APP_ENV` (Default `production`), lokal per gitignorter `docker-compose.override.yml` auf `development` gesetzt — landet nie auf dem Server |
 | 0.4.0   | Mail-Import: eingehende Mails werden nur noch verarbeitet, wenn der Betreff „Zeiterfassung" enthält (sonst Status `skipped`, kein Fehler-Reply) — schützt das dedizierte Postfach vor fremder Post. Erfolgreich verarbeitete Mails werden per `\Deleted`+`expunge()` vom IMAP-Server gelöscht statt nur als gelesen markiert. `POST /api/mail/poll` liefert jetzt `{parsed, skipped, errors}`, der „Jetzt abrufen"-Button zeigt das Ergebnis direkt an. Neuer `DELETE /api/mail/log`-Endpoint + „Log löschen"-Button (mit `window.confirm()`). `IMAP_POLL_INTERVAL`-Default auf 3600s (1h) als Backup erhöht — primärer Weg ist der manuelle Button |
+| 0.4.1   | Fix: manuelle/bearbeitete Zeiteinträge wurden ohne Zeitzonen-Umrechnung gespeichert — die im `<input type="time">` eingegebene lokale Uhrzeit landete unverändert als vermeintlich-UTC in der DB, wodurch Anzeige und erneutes Bearbeiten stets um den UTC-Offset verschoben waren und eine Korrektur nie ankam. Neue Helper `localTimeToUTC`/`utcToLocalTime` (`hooks/useTimer.js`) rechnen jetzt konsequent um. `EditEntryModal` als eigene Komponente extrahiert (vorher in `TimerPage.jsx` dupliziert) und zusätzlich in Verlauf und Woche verdrahtet — Zeitslots sind jetzt überall bearbeitbar, nicht nur auf der Timer-Seite |
 
 ### Doku-Versionshistorie
 
@@ -704,3 +705,4 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 | v4.15   | Beschreibungs-Autocomplete für Timer-Start/manuellen Eintrag/Eintrag bearbeiten, neuer Abschnitt „Beschreibungs-Autocomplete" (s. App-Versionshistorie 0.2.0) |
 | v4.16   | Rotes Dev-Favicon zur Unterscheidung von der Produktivumgebung, `docker-compose.override.yml`-Mechanismus im Abschnitt „Docker Multi-Stage (Frontend)" ergänzt (s. App-Versionshistorie 0.3.0) |
 | v4.17   | Mail-Import: Betreff-Pflicht „Zeiterfassung", Server-seitiges Löschen nach erfolgreicher Verarbeitung, Poll-Ergebnis-Feedback, Mail-Log löschbar (s. App-Versionshistorie 0.4.0) |
+| v4.18   | Fix Zeitzonen-Offset bei manuellen/bearbeiteten Zeiteinträgen, Bearbeiten-Funktion jetzt auch in Verlauf und Woche (s. App-Versionshistorie 0.4.1) |

@@ -38,6 +38,28 @@ export function fmtTime(dt) {
   return d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
 }
 
+// Converts a wall-clock HH:MM entered for a given local calendar date into the
+// UTC date/time the backend stores. Entries are always persisted as UTC (like the
+// live timer's datetime.utcnow()), so manual/edited times must go through this
+// conversion too, or they end up offset by the browser's timezone on every read.
+export function localTimeToUTC(dateStr, hhmm) {
+  const [y, mo, d]  = dateStr.split('-').map(Number)
+  const [h, mi]     = hhmm.split(':').map(Number)
+  const local = new Date(y, mo - 1, d, h, mi, 0, 0)
+  const pad = n => String(n).padStart(2, '0')
+  return {
+    date: `${local.getUTCFullYear()}-${pad(local.getUTCMonth() + 1)}-${pad(local.getUTCDate())}`,
+    time: `${pad(local.getUTCHours())}:${pad(local.getUTCMinutes())}`,
+  }
+}
+
+// Inverse of localTimeToUTC: a UTC ISO string -> local wall-clock HH:MM for editing.
+export function utcToLocalTime(dt) {
+  const d = new Date((dt.endsWith('Z') ? dt : dt + 'Z'))
+  const pad = n => String(n).padStart(2, '0')
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
 // ── Overtime thresholds ───────────────────────────────────────────────────────
 export const WORK_DAY_MINUTES = 8 * 60    // 480 min
 export const MAX_DAY_MINUTES  = 10 * 60   // 600 min

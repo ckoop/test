@@ -6,6 +6,7 @@ import { fmtMinutes, fmtTime } from '../hooks/useTimer'
 import { useProjectNames } from '../hooks/useProjects'
 import OvertimeBanner from './OvertimeBanner'
 import { ManualEntryModal } from './ManualEntryModal'
+import { EditEntryModal } from './EditEntryModal'
 
 dayjs.locale('de')
 
@@ -15,6 +16,7 @@ export default function HistoryPage({ projectFilter, setProjectFilter }) {
   const [from, setFrom]         = useState(dayjs().subtract(30, 'day').format('YYYY-MM-DD'))
   const [to, setTo]             = useState(dayjs().format('YYYY-MM-DD'))
   const [showManual, setShowManual] = useState(false)
+  const [showEdit, setShowEdit]     = useState(null) // entry to edit
   const [taskFilter, setTaskFilter] = useState('')
   const { names: projectNames } = useProjectNames()
 
@@ -108,7 +110,7 @@ export default function HistoryPage({ projectFilter, setProjectFilter }) {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {dayEntries.map(e => (
-                    <HistoryRow key={e.id} entry={e} onDelete={() => api.deleteEntry(e.id).then(load)} />
+                    <HistoryRow key={e.id} entry={e} onDelete={() => api.deleteEntry(e.id).then(load)} onEdit={() => setShowEdit(e)} />
                   ))}
                 </div>
               </div>
@@ -124,11 +126,18 @@ export default function HistoryPage({ projectFilter, setProjectFilter }) {
           onSaved={() => { setShowManual(false); load() }}
         />
       )}
+      {showEdit && (
+        <EditEntryModal
+          entry={showEdit}
+          onClose={() => setShowEdit(null)}
+          onSaved={() => { setShowEdit(null); load() }}
+        />
+      )}
     </div>
   )
 }
 
-function HistoryRow({ entry, onDelete }) {
+function HistoryRow({ entry, onDelete, onEdit }) {
   return (
     <div className="card-sm flex items-center gap-2" style={{ padding: '9px 12px' }}>
       <div className="mono" style={{ fontSize: 10, color: 'var(--text3)', flexShrink: 0 }}>
@@ -140,7 +149,10 @@ function HistoryRow({ entry, onDelete }) {
         {entry.description && <span style={{ fontSize: 11, color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entry.description}</span>}
       </div>
       <div className="mono" style={{ fontSize: 12, flexShrink: 0 }}>{fmtMinutes(entry.duration_minutes)}</div>
-      <button className="btn-icon" onClick={() => { if (confirm('Löschen?')) onDelete() }}>
+      <button className="btn-icon" onClick={onEdit} title="Bearbeiten">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      </button>
+      <button className="btn-icon" onClick={() => { if (confirm('Löschen?')) onDelete() }} title="Löschen">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M19 6l-1 14H6L5 6M10 11v6M14 11v6M9 6V4h6v2"/></svg>
       </button>
     </div>
