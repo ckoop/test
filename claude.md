@@ -74,8 +74,10 @@ timetracker/
 │   ├── requirements.txt
 │   └── main.py                      # Gesamte Backend-Logik (~850 Zeilen)
 └── frontend/
-    ├── Dockerfile                   # Multi-Stage: node build → nginx
-    ├── nginx.conf                   # Static files + /api proxy
+    ├── Dockerfile                   # Multi-Stage: node build → nginx (+ openssl fürs Zertifikat)
+    ├── nginx.conf                   # Static files + /api proxy, Server-Blöcke für Port 80 + 443
+    ├── locations.conf               # Gemeinsame Locations für die 80/443-Server-Blöcke (s. „HTTPS")
+    ├── docker-entrypoint.sh         # Erzeugt selbstsigniertes TLS-Zertifikat beim ersten Start (s. „HTTPS")
     ├── package.json
     ├── vite.config.js
     ├── index.html                   # PWA meta tags
@@ -103,7 +105,8 @@ timetracker/
             ├── ExportPage.jsx       # CSV / JSON Export + Tageszusammenfassung (Text, Vorschau + .txt-Download)
             ├── SettingsPage.jsx     # Projektverwaltung (neu/umbenennen/Farbe/archiv) + Pomodoro- + Idle-Einstellungen
             ├── OvertimeBanner.jsx   # Überstunden-Anzeige (compact + full)
-            └── ManualEntryModal.jsx # Shared Modal für manuelle Einträge
+            ├── ManualEntryModal.jsx # Shared Modal für manuelle Einträge (rechnet lokale Zeit ↔ UTC um, s. useTimer.js)
+            └── EditEntryModal.jsx   # Shared Modal zum Bearbeiten bestehender Einträge — in Timer, Verlauf und Woche
 ```
 
 ---
@@ -569,16 +572,26 @@ FROM nginx:alpine                 # nur dist/ + nginx.conf
 
 **Dev-vs-Prod-Favicon:** Build-`ARG APP_ENV` (Default `production`) wird als `VITE_APP_ENV` in den Vite-Build eingebacken. Lokal setzt eine **gitignorte** `docker-compose.override.yml` (wird von Docker Compose automatisch mitgeladen, sobald sie neben `docker-compose.yml` liegt) `APP_ENV: development` für den `frontend`-Build — dadurch zeigt der Tab lokal ein rotes statt das neongrüne Favicon (`favicon-dev.svg`). Die Override-Datei landet nie im Git-Verlauf und wird von `sync_to_server.sh` (nutzt `.gitignore` als rsync-Exclude-Liste) nie mitkopiert, der Server baut also immer mit `APP_ENV=production`.
 
+### HTTPS (selbstsigniertes Zertifikat)
+
+Manche Browser-APIs verlangen einen **Secure Context** (HTTPS oder `localhost`) — z.B. Document Picture-in-Picture fürs Schwebende Fenster (s. „Bekannte Einschränkungen"), künftig auch der geplante Service Worker für Push (s. „TODO"). Über reines HTTP auf einer LAN-IP/einem Hostnamen fehlt das, daher läuft Nginx im `frontend`-Container jetzt zusätzlich auf Port 443:
+
+- **Zertifikat:** `frontend/docker-entrypoint.sh` erzeugt beim allerersten Start ein selbstsigniertes Zertifikat (10 Jahre gültig) via `openssl`, falls im Bind-Mount `./data/certs` noch keins liegt — bleibt danach über Rebuilds/Neustarts hinweg erhalten.
+- **`SSL_SAN`** (`.env`) legt fest, für welche Hostnamen/IPs das Zertifikat gültig ist, z.B. `SSL_SAN=IP:10.0.0.10,DNS:localhost,IP:127.0.0.1`. Ohne passenden Eintrag für die tatsächlich aufgerufene Adresse blockt der Browser die Verbindung komplett (nicht nur eine Warnung).
+- **Port:** `docker-compose.yml` mappt `3443:443` (fix, nicht wie der HTTP-Port per `HOST_PORT` parametrisiert).
+- **Browser-Warnung:** Da selbstsigniert, zeigt jeder Browser beim ersten Aufruf eine Zertifikatswarnung — einmal pro Gerät/Browser bestätigen.
+- **Mehrere Zielserver:** Jeder Server braucht sein **eigenes** `SSL_SAN` für seine eigene IP/seinen Hostnamen (lokal-only Deploy-Tooling in `deploy/`, s. Versionierungs-Hinweis unten — nicht Teil des öffentlichen Repo-Verlaufs). Das dortige Sync-Skript kopiert `.env` bei jedem Sync komplett neu — dabei bleibt ein auf dem Zielserver bereits gesetzter `SSL_SAN`-Wert automatisch erhalten (wird nach dem Kopieren zurückgeschrieben), oder lässt sich explizit als Env-Var beim Sync-Aufruf überschreiben. Ohne beides würde der zuerst kopierte Wert des Quell-Servers stehen bleiben — das Zertifikat wäre dann für die falsche Adresse gültig.
+
 ---
 
 ## Bekannte Einschränkungen
 
 - **SQLite** — kein paralleler Schreibzugriff; für Einzel-User ausreichend
 - **IMAP-Polling** — blockierender Call in `run_in_executor`; bei sehr vielen Mails spürbar
-- **Zeitzone** — UTC im Backend, Lokalzeit im Browser; bei verschiedenen Zeitzonen möglich falsche Darstellung manueller Einträge
+- **Zeitzone** — Backend speichert konsequent UTC (Timer wie manuelle/bearbeitete Einträge, s. `localTimeToUTC`/`utcToLocalTime` in `useTimer.js`), Anzeige rechnet immer in die Browser-Lokalzeit um; bei Zugriff aus unterschiedlichen Zeitzonen zeigt jeder Browser dieselbe absolute Zeit entsprechend seiner eigenen Zeitzone an (kein DB-Problem, aber ggf. gewöhnungsbedürftig bei Multi-Timezone-Nutzung)
 - **Keine Authentifizierung** — für lokales Netz ausreichend; für Internet: Basic Auth in Nginx empfohlen
 - **PWA ohne Service Worker** — kein Offline-Betrieb
-- **Schwebendes Fenster (Document Picture-in-Picture)** — nur Desktop-Chromium (Chrome/Edge/Brave ≥ 116); auf Mobil (Android/iOS) fehlt die API in allen Browsern, Button dort ausgeblendet
+- **Schwebendes Fenster (Document Picture-in-Picture)** — nur Desktop-Chromium (Chrome/Edge/Brave ≥ 116); auf Mobil (Android/iOS) fehlt die API in allen Browsern, Button dort ausgeblendet. Zusätzlich verlangt die API einen **Secure Context** (HTTPS oder `localhost`) — über reines HTTP auf einer LAN-IP/einem Hostnamen bleibt der Button ausgeblendet, selbst in einem unterstützten Browser (s. „HTTPS (selbstsigniertes Zertifikat)")
 - **Projekte in Einträgen** — Umbenennen eines Projekts ändert **nicht** die bestehenden Einträge (String-Referenz); bei Umbenennung bleibt der alte Name in historischen Einträgen erhalten
 - **Idle-Erkennung** — basiert auf `visibilitychange`, nicht auf echter Maus-/Tastatur-Inaktivität; erkennt zuverlässig Rechner sperren/Tab wechseln, aber nicht "Tab bleibt offen sichtbar, aber Nutzer ist einfach weg" (z.B. Bildschirm bleibt an); Schwelle ist in den Settings konfigurierbar, aber **pro Gerät** (localStorage) — synct nicht zwischen Geräten wie die Pomodoro-Settings
 
@@ -602,7 +615,7 @@ Document Picture-in-Picture (siehe „Schwebendes Fenster (Floating Widget) im D
 
 **Zu beachten:**
 - Führt den **ersten Service Worker** im Projekt ein — bricht mit der bisherigen bewussten Einschränkung „PWA ohne Service Worker" (s. o.); architektonischer Schritt, nicht nur ein Feature-Häkchen
-- **HTTPS Pflicht** für Service Worker + Push (außer `localhost`) — Voraussetzung ist der geplante Let's-Encrypt-Rollout
+- **HTTPS Pflicht** für Service Worker + Push (außer `localhost`) — erfüllt seit dem selbstsignierten Zertifikat (s. „HTTPS (selbstsigniertes Zertifikat)"); kein Let's-Encrypt-Rollout mehr nötig, Voraussetzung ist also schon da
 - iOS nur wenn PWA per „Zum Home-Bildschirm hinzufügen" installiert ist, iOS ≥ 16.4, stärker eingeschränkt als Android
 
 ---
@@ -657,8 +670,8 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 - **Fix/Kleinigkeit ohne neues Feature** → nur PATCH hoch (z.B. `0.2.0` → `0.2.1`)
 - **MAJOR** (`1.0.0` etc.) → nie eigenmächtig, vorher immer beim Nutzer nachfragen
 
-**Aktuelle App-Version: 0.4.1**
-**Aktuelle Doku-Version: v4.18**
+**Aktuelle App-Version: 0.5.0**
+**Aktuelle Doku-Version: v4.19**
 
 ### App-Versionshistorie
 
@@ -670,6 +683,7 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 | 0.3.0   | Rotes Favicon in der lokalen Dev-Umgebung zur Unterscheidung von Produktion (grün): `favicon-dev.svg`, Umschaltung in `main.jsx` bei `import.meta.env.DEV` (Vite-Dev-Server) **oder** `VITE_APP_ENV === 'development'` (Docker-Build). Neues Dockerfile-`ARG APP_ENV` (Default `production`), lokal per gitignorter `docker-compose.override.yml` auf `development` gesetzt — landet nie auf dem Server |
 | 0.4.0   | Mail-Import: eingehende Mails werden nur noch verarbeitet, wenn der Betreff „Zeiterfassung" enthält (sonst Status `skipped`, kein Fehler-Reply) — schützt das dedizierte Postfach vor fremder Post. Erfolgreich verarbeitete Mails werden per `\Deleted`+`expunge()` vom IMAP-Server gelöscht statt nur als gelesen markiert. `POST /api/mail/poll` liefert jetzt `{parsed, skipped, errors}`, der „Jetzt abrufen"-Button zeigt das Ergebnis direkt an. Neuer `DELETE /api/mail/log`-Endpoint + „Log löschen"-Button (mit `window.confirm()`). `IMAP_POLL_INTERVAL`-Default auf 3600s (1h) als Backup erhöht — primärer Weg ist der manuelle Button |
 | 0.4.1   | Fix: manuelle/bearbeitete Zeiteinträge wurden ohne Zeitzonen-Umrechnung gespeichert — die im `<input type="time">` eingegebene lokale Uhrzeit landete unverändert als vermeintlich-UTC in der DB, wodurch Anzeige und erneutes Bearbeiten stets um den UTC-Offset verschoben waren und eine Korrektur nie ankam. Neue Helper `localTimeToUTC`/`utcToLocalTime` (`hooks/useTimer.js`) rechnen jetzt konsequent um. `EditEntryModal` als eigene Komponente extrahiert (vorher in `TimerPage.jsx` dupliziert) und zusätzlich in Verlauf und Woche verdrahtet — Zeitslots sind jetzt überall bearbeitbar, nicht nur auf der Timer-Seite |
+| 0.5.0   | HTTPS mit selbstsigniertem Zertifikat im bestehenden Nginx (`frontend`-Container): zweiter Server-Block auf Port 443 (extern `3443`), Zertifikat wird beim ersten Start automatisch erzeugt (`docker-entrypoint.sh`), gültige Hostnamen/IPs über `SSL_SAN` (`.env`) konfigurierbar. Schafft den Secure Context, den z.B. das Schwebende Fenster (Document Picture-in-Picture) außerhalb von `localhost` braucht (s. „Bekannte Einschränkungen") — vorher über reines HTTP auf einer LAN-IP nicht verfügbar, unabhängig vom Browser |
 
 ### Doku-Versionshistorie
 
@@ -706,3 +720,4 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 | v4.16   | Rotes Dev-Favicon zur Unterscheidung von der Produktivumgebung, `docker-compose.override.yml`-Mechanismus im Abschnitt „Docker Multi-Stage (Frontend)" ergänzt (s. App-Versionshistorie 0.3.0) |
 | v4.17   | Mail-Import: Betreff-Pflicht „Zeiterfassung", Server-seitiges Löschen nach erfolgreicher Verarbeitung, Poll-Ergebnis-Feedback, Mail-Log löschbar (s. App-Versionshistorie 0.4.0) |
 | v4.18   | Fix Zeitzonen-Offset bei manuellen/bearbeiteten Zeiteinträgen, Bearbeiten-Funktion jetzt auch in Verlauf und Woche (s. App-Versionshistorie 0.4.1) |
+| v4.19   | HTTPS mit selbstsigniertem Zertifikat dokumentiert (neuer Abschnitt „HTTPS (selbstsigniertes Zertifikat)"), Dateistruktur um `EditEntryModal.jsx`/`locations.conf`/`docker-entrypoint.sh` ergänzt, veraltete Zeitzonen-Zeile in „Bekannte Einschränkungen" korrigiert, PiP-Einschränkung um Secure-Context-Hinweis ergänzt, Push-TODO aktualisiert (HTTPS-Voraussetzung erfüllt) (s. App-Versionshistorie 0.5.0) |

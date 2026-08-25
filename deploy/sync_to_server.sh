@@ -16,6 +16,18 @@
 #   noetig, wenn Port 3000 auf dem Zielserver schon belegt ist. Wird bei
 #   jedem Sync neu gesetzt, geht also bei einem erneuten Sync ohne diese
 #   Variable wieder auf 3000 zurueck.
+#
+# SSL_SAN="IP:1.2.3.4,DNS:localhost,IP:127.0.0.1" ./sync_to_server.sh <user@host> <remote_pfad>
+#   Setzt SSL_SAN in der Ziel-.env explizit (fuer welche Hostnamen/IPs das
+#   selbstsignierte TLS-Zertifikat des Zielservers gueltig sein soll, s.
+#   frontend/docker-entrypoint.sh). Die .env wird bei jedem Sync komplett
+#   durch die lokale Kopie ersetzt (scp) — ohne diese Variable wuerde dabei
+#   ein bereits auf dem Zielserver gesetzter SSL_SAN-Wert durch den Wert
+#   des Quell-Servers ueberschrieben werden. Darum: ohne diese Variable
+#   bleibt ein bereits vorhandener SSL_SAN-Wert auf dem Zielserver erhalten
+#   (wird nach dem Kopieren zurueckgeschrieben); ist auf dem Zielserver noch
+#   keiner gesetzt (allererster Sync), bleibt der lokale Wert stehen und es
+#   gibt eine Warnung, da er dann auf die falsche IP zeigen wird.
 
 set -e
 
@@ -41,9 +53,40 @@ else
   echo "SKIP_DATA=1 gesetzt — Datenbank wird NICHT synchronisiert (Zielserver behaelt seine eigenen Daten)."
 fi
 
+# Bisherigen SSL_SAN-Wert auf dem Zielserver sichern, BEVOR die .env
+# gleich komplett durch die lokale Kopie ersetzt wird (s. SSL_SAN oben).
+OLD_SSL_SAN="$(ssh "$TARGET_HOST" "grep '^SSL_SAN=' '$REMOTE_PATH/.env' 2>/dev/null | head -1" || true)"
+
 # Secrets kopieren (.env muss neben der docker-compose.yml liegen, damit
 # docker compose die Variablen automatisch einliest)
 scp "$PROJECT_DIR/.env" "$TARGET_HOST:$REMOTE_PATH/.env"
+
+# SSL_SAN in der Ziel-.env auf den serverspezifischen Wert setzen/erhalten
+# (s. SSL_SAN oben) statt den gerade kopierten, falschen Quell-Server-Wert
+# stehen zu lassen.
+if [ -n "${SSL_SAN:-}" ]; then
+  DESIRED_SSL_SAN="SSL_SAN=$SSL_SAN"
+elif [ -n "$OLD_SSL_SAN" ]; then
+  DESIRED_SSL_SAN="$OLD_SSL_SAN"
+else
+  DESIRED_SSL_SAN=""
+fi
+
+if [ -n "$DESIRED_SSL_SAN" ]; then
+  ssh "$TARGET_HOST" "grep -q '^SSL_SAN=' '$REMOTE_PATH/.env' && sed -i \"s|^SSL_SAN=.*|$DESIRED_SSL_SAN|\" '$REMOTE_PATH/.env' || echo '$DESIRED_SSL_SAN' >> '$REMOTE_PATH/.env'"
+  NEW_SSL_SAN_LINE="$(ssh "$TARGET_HOST" "grep '^SSL_SAN=' '$REMOTE_PATH/.env'" || true)"
+  echo "SSL_SAN auf dem Zielserver jetzt: ${NEW_SSL_SAN_LINE:-<keine Zeile gefunden>}"
+  case "$NEW_SSL_SAN_LINE" in
+    "$DESIRED_SSL_SAN")
+      echo "OK — SSL_SAN korrekt gesetzt."
+      ;;
+    *)
+      echo "WARNUNG: SSL_SAN wurde NICHT wie erwartet gesetzt — bitte $REMOTE_PATH/.env auf dem Zielserver manuell pruefen."
+      ;;
+  esac
+else
+  echo "WARNUNG: Kein SSL_SAN fuer den Zielserver bekannt (weder per SSL_SAN=... uebergeben noch dort bereits vorhanden) — die kopierte .env enthaelt jetzt den Wert des Quell-Servers. Vor dem naechsten Container-Start SSL_SAN in $REMOTE_PATH/.env manuell auf die IP/den Hostnamen des Zielservers setzen, sonst ist das dort erzeugte TLS-Zertifikat fuer die falsche Adresse gueltig."
+fi
 
 # Bind-Mount-Pfad in der docker-compose.yml auf den Zielpfad umschreiben —
 # sonst zeigt er weiter auf den Quell-Server und die App startet dort mit

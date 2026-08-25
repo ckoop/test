@@ -41,6 +41,13 @@ services:
     restart: unless-stopped
     ports:
       - "3000:80"
+      - "3443:443"
+    volumes:
+      - ./data/certs:/etc/nginx/certs
+    environment:
+      # Für welche Hostnamen/IPs das selbstsignierte TLS-Zertifikat gültig ist,
+      # s. frontend/docker-entrypoint.sh. Bei Bedarf in .env überschreiben.
+      - SSL_SAN=${SSL_SAN:-DNS:localhost,IP:127.0.0.1}
     depends_on:
       - backend
     networks:
