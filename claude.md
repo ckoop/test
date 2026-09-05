@@ -82,9 +82,12 @@ timetracker/
     ├── vite.config.js
     ├── index.html                   # PWA meta tags
     ├── public/
-    │   ├── manifest.json
+    │   ├── manifest.json             # Referenziert icon-192.png/icon-512.png — beide müssen bei Änderung an favicon.svg manuell neu gerendert werden (kein Build-Step dafür)
     │   ├── favicon.svg               # Uhr-Icon (Accent-Grün auf dunklem Grund), gleiche Formsprache wie IcoTimer
-    │   └── favicon-dev.svg           # Gleiche Form, Rot statt Grün — nur lokal aktiv (s. „Docker Multi-Stage")
+    │   ├── favicon-dev.svg           # Gleiche Form, Rot statt Grün — nur lokal aktiv (s. „Docker Multi-Stage")
+    │   ├── icon-192.png              # Aus favicon.svg gerendert — Android/Chrome "App installieren" (Manifest-Icon)
+    │   ├── icon-512.png              # Dito, größere Auflösung (Manifest-Icon)
+    │   └── apple-touch-icon.png      # 180×180, dito — iOS Safari ignoriert das Manifest weitgehend und braucht einen eigenen <link rel="apple-touch-icon"> in index.html
     └── src/
         ├── main.jsx
         ├── App.jsx                  # Routing + BottomNav (7 Tabs)
@@ -670,8 +673,8 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 - **Fix/Kleinigkeit ohne neues Feature** → nur PATCH hoch (z.B. `0.2.0` → `0.2.1`)
 - **MAJOR** (`1.0.0` etc.) → nie eigenmächtig, vorher immer beim Nutzer nachfragen
 
-**Aktuelle App-Version: 0.5.0**
-**Aktuelle Doku-Version: v4.19**
+**Aktuelle App-Version: 0.5.1**
+**Aktuelle Doku-Version: v4.20**
 
 ### App-Versionshistorie
 
@@ -684,6 +687,7 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 | 0.4.0   | Mail-Import: eingehende Mails werden nur noch verarbeitet, wenn der Betreff „Zeiterfassung" enthält (sonst Status `skipped`, kein Fehler-Reply) — schützt das dedizierte Postfach vor fremder Post. Erfolgreich verarbeitete Mails werden per `\Deleted`+`expunge()` vom IMAP-Server gelöscht statt nur als gelesen markiert. `POST /api/mail/poll` liefert jetzt `{parsed, skipped, errors}`, der „Jetzt abrufen"-Button zeigt das Ergebnis direkt an. Neuer `DELETE /api/mail/log`-Endpoint + „Log löschen"-Button (mit `window.confirm()`). `IMAP_POLL_INTERVAL`-Default auf 3600s (1h) als Backup erhöht — primärer Weg ist der manuelle Button |
 | 0.4.1   | Fix: manuelle/bearbeitete Zeiteinträge wurden ohne Zeitzonen-Umrechnung gespeichert — die im `<input type="time">` eingegebene lokale Uhrzeit landete unverändert als vermeintlich-UTC in der DB, wodurch Anzeige und erneutes Bearbeiten stets um den UTC-Offset verschoben waren und eine Korrektur nie ankam. Neue Helper `localTimeToUTC`/`utcToLocalTime` (`hooks/useTimer.js`) rechnen jetzt konsequent um. `EditEntryModal` als eigene Komponente extrahiert (vorher in `TimerPage.jsx` dupliziert) und zusätzlich in Verlauf und Woche verdrahtet — Zeitslots sind jetzt überall bearbeitbar, nicht nur auf der Timer-Seite |
 | 0.5.0   | HTTPS mit selbstsigniertem Zertifikat im bestehenden Nginx (`frontend`-Container): zweiter Server-Block auf Port 443 (extern `3443`), Zertifikat wird beim ersten Start automatisch erzeugt (`docker-entrypoint.sh`), gültige Hostnamen/IPs über `SSL_SAN` (`.env`) konfigurierbar. Schafft den Secure Context, den z.B. das Schwebende Fenster (Document Picture-in-Picture) außerhalb von `localhost` braucht (s. „Bekannte Einschränkungen") — vorher über reines HTTP auf einer LAN-IP nicht verfügbar, unabhängig vom Browser |
+| 0.5.1   | Fix: PWA-Icon fürs Installieren auf dem Handy fehlte — `manifest.json` referenzierte `icon-192.png`/`icon-512.png`, die nie existierten (nur die `favicon.svg` war vorhanden), daher zeigte „Zum Startbildschirm hinzufügen" kein Icon. Beide PNGs aus der `favicon.svg` gerendert, dazu `apple-touch-icon.png` (180×180) ergänzt und in `index.html` verlinkt (iOS Safari nutzt das Manifest kaum und braucht einen eigenen `<link>`-Tag) |
 
 ### Doku-Versionshistorie
 
