@@ -62,7 +62,7 @@ Browser / Handy (PWA)
 **Voraussetzungen:** Docker + Docker Compose.
 
 ```bash
-git clone <repo-url> epoch
+git clone https://github.com/ckoop/epoch.git
 cd epoch
 docker compose up --build
 ```
