@@ -10,7 +10,7 @@ if (import.meta.env.DEV || import.meta.env.VITE_APP_ENV === 'development') {
 }
 
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => { /* Push wird dann einfach nicht angeboten */ })
+  navigator.serviceWorker.register('/sw.js').catch((err) => { console.error('[sw] Registrierung fehlgeschlagen:', err) })
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(

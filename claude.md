@@ -495,7 +495,23 @@ Mobiles Pendant zum Schwebenden Fenster (siehe oben) — Document Picture-in-Pic
 
 **Service Worker (`public/sw.js`):** `push`-Event parst das JSON-Payload (`{title, body}`) und zeigt es via `registration.showNotification()` mit festem `tag: 'epoch-timer'` — ersetzt die vorherige Notification statt zu stapeln. `notificationclick` fokussiert ein offenes Fenster oder öffnet die App neu.
 
-**HTTPS Pflicht** für Service Worker + Push (außer `localhost`, gilt als sicherer Kontext) — echtes Push-Testing auf einem Handy ist daher erst nach dem Let's-Encrypt-Rollout möglich (separates TODO, siehe Backup-Punkt unten). iOS nur wenn die PWA per „Zum Home-Bildschirm hinzufügen" installiert ist, iOS ≥ 16.4, stärker eingeschränkt als Android.
+**HTTPS Pflicht** für Service Worker + Push (außer `localhost`, gilt als sicherer Kontext). iOS nur wenn die PWA per „Zum Home-Bildschirm hinzufügen" installiert ist, iOS ≥ 16.4, stärker eingeschränkt als Android.
+
+**Achtung beim Testen über HTTPS mit dem selbstsignierten Zertifikat (`:3443`, s. „HTTPS (selbstsigniertes Zertifikat)"):** Die normale Klick-durch-Ausnahme im Browser ("Trotzdem fortfahren" bei der Zertifikatswarnung) reicht für den Seitenaufruf, **aber nicht** für die Service-Worker-Registrierung — die verlangt eine echt vertrauenswürdige Zertifikatskette. Ohne das schlägt `navigator.serviceWorker.register('/sw.js')` in `main.jsx` mit `SecurityError: ... An SSL certificate error occurred when fetching the script.` fehl, und zwar **lautlos** (der `.catch()` loggt den Fehler nur in die Konsole, zeigt aber keinen sichtbaren Hinweis in der UI) — der Push-Toggle bleibt dann einfach dauerhaft deaktiviert, ohne erkennbaren Grund. Fix: das Zertifikat `./data/certs/fullchain.pem` auf jedem Testgerät zusätzlich als vertrauenswürdige CA importieren (einmalig pro Gerät):
+
+- **Linux-Desktop (NSS-Truststore, gilt für Chrome/Chromium/Brave):**
+  ```bash
+  sudo apt install libnss3-tools   # einmalig, stellt certutil bereit
+  certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "Epoch Dev CA" -i ./data/certs/fullchain.pem
+  ```
+  Browser danach **komplett neu starten** (nicht nur Tab neu laden) — NSS-Änderungen greifen erst dann.
+  Firefox hat einen eigenen, separaten Zertifikatsspeicher: `about:preferences#privacy` → „Zertifikate anzeigen" → „Zertifizierungsstellen" → „Importieren".
+
+- **Android:** Zertifikatsdatei aufs Handy bringen (z. B. kurzzeitig über den laufenden `frontend`-Container zum Download bereitstellen: `docker cp data/certs/fullchain.pem timetracker-frontend:/usr/share/nginx/html/epoch-dev-ca.crt`, dann im Handy-Browser `http://<LAN-IP>:3000/epoch-dev-ca.crt` herunterladen — Datei danach aus dem Container wieder entfernen). Einstellungen → Sicherheit → **Verschlüsselung & Anmeldedaten** → **Zertifikat installieren** → **CA-Zertifikat** → heruntergeladene Datei wählen. Android warnt danach dauerhaft mit einem Schild-Symbol in der Statusleiste ("Netzwerk wird möglicherweise überwacht") — erwartetes Verhalten bei jeder installierten User-CA, kein Fehler.
+
+- **iOS:** Zertifikat als Profil per Safari herunterladen (z. B. über denselben Download-Weg wie bei Android) → Einstellungen → Profil geladen → installieren. **Zusätzlicher Schritt nötig**, den iOS separat abfragt: Einstellungen → Allgemein → Info → Zertifikatsvertrauenseinstellungen → volles Vertrauen für das Zertifikat aktivieren — ohne diesen zweiten Schritt bleibt es trotz installiertem Profil nicht vertrauenswürdig.
+
+Ist das Zertifikat einmal auf einem Gerät als CA vertraut, braucht dieses Gerät für zukünftige Sessions keinen erneuten Import — die Subscription bleibt in `push_subscriptions` gespeichert und unabhängig davon, von welchem Gerät/Port aus der Timer später gestartet wird (`_send_push_to_all()` sendet ohnehin an alle gespeicherten Subscriptions).
 
 ---
 
@@ -717,8 +733,8 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 - **Fix/Kleinigkeit ohne neues Feature** → nur PATCH hoch (z.B. `0.2.0` → `0.2.1`)
 - **MAJOR** (`1.0.0` etc.) → nie eigenmächtig, vorher immer beim Nutzer nachfragen
 
-**Aktuelle App-Version: 0.6.0**
-**Aktuelle Doku-Version: v4.20**
+**Aktuelle App-Version: 0.6.1**
+**Aktuelle Doku-Version: v4.21**
 
 ### App-Versionshistorie
 
@@ -733,6 +749,7 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 | 0.5.0   | HTTPS mit selbstsigniertem Zertifikat im bestehenden Nginx (`frontend`-Container): zweiter Server-Block auf Port 443 (extern `3443`), Zertifikat wird beim ersten Start automatisch erzeugt (`docker-entrypoint.sh`), gültige Hostnamen/IPs über `SSL_SAN` (`.env`) konfigurierbar. Schafft den Secure Context, den z.B. das Schwebende Fenster (Document Picture-in-Picture) außerhalb von `localhost` braucht (s. „Bekannte Einschränkungen") — vorher über reines HTTP auf einer LAN-IP nicht verfügbar, unabhängig vom Browser |
 | 0.5.1   | Fix: PWA-Icon fürs Installieren auf dem Handy fehlte — `manifest.json` referenzierte `icon-192.png`/`icon-512.png`, die nie existierten (nur die `favicon.svg` war vorhanden), daher zeigte „Zum Startbildschirm hinzufügen" kein Icon. Beide PNGs aus der `favicon.svg` gerendert, dazu `apple-touch-icon.png` (180×180) ergänzt und in `index.html` verlinkt (iOS Safari nutzt das Manifest kaum und braucht einen eigenen `<link>`-Tag) |
 | 0.6.0   | Merge `feature/push-notifications`: Web-Push-Benachrichtigungen für laufenden Timer/Pomodoro als Mobile-Pendant zum Schwebenden Fenster (erster Service Worker, `push_subscriptions`-Tabelle, `/api/push/*`, VAPID/`pywebpush`, `PushSettingsCard`), dazu Branch-Badge in der Sidebar für Builds abseits von `main` (s. „Push-Benachrichtigungen im Detail") |
+| 0.6.1   | Fix: Fehlschlagende Service-Worker-Registrierung (z. B. `SecurityError` bei nicht vertrauenswürdigem HTTPS-Zertifikat) wurde in `main.jsx` bisher komplett lautlos verschluckt (`.catch(() => {})`), wodurch der Push-Toggle ohne jeden erkennbaren Grund dauerhaft deaktiviert blieb. Loggt den Fehler jetzt in die Konsole (`console.error`) — kein UI-Verhalten geändert, nur Diagnose beim Debuggen erleichtert (s. „Push-Benachrichtigungen im Detail") |
 
 ### Doku-Versionshistorie
 
@@ -771,3 +788,4 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 | v4.18   | Fix Zeitzonen-Offset bei manuellen/bearbeiteten Zeiteinträgen, Bearbeiten-Funktion jetzt auch in Verlauf und Woche (s. App-Versionshistorie 0.4.1) |
 | v4.19   | HTTPS mit selbstsigniertem Zertifikat dokumentiert (neuer Abschnitt „HTTPS (selbstsigniertes Zertifikat)"), Dateistruktur um `EditEntryModal.jsx`/`locations.conf`/`docker-entrypoint.sh` ergänzt, veraltete Zeitzonen-Zeile in „Bekannte Einschränkungen" korrigiert, PiP-Einschränkung um Secure-Context-Hinweis ergänzt, Push-TODO aktualisiert (HTTPS-Voraussetzung erfüllt) (s. App-Versionshistorie 0.5.0) |
 | v4.20   | Merge des `feature/push-notifications`-Branches: Web-Push-Notifications als Mobile-Pendant zum Schwebenden Fenster (erster Service Worker im Projekt `public/sw.js`, `push_subscriptions`-Tabelle, `/api/push/*`-Endpoints, `_push_loop()` + Sofort-Push bei Pomodoro-Phasenwechsel per `pywebpush`/VAPID, `PushSettingsCard` mit Subscribe-Toggle) sowie Branch-Badge in der Sidebar (⎇, Amber) für Builds abseits von `main` — Branch-Name via `git rev-parse` in `vite.config.js` zur Build-Zeit ermittelt, Docker-Fallback über `VITE_GIT_BRANCH`/Dockerfile-`ARG GIT_BRANCH` (s. App-Versionshistorie 0.6.0) |
+| v4.21   | Push-Notification-Testing über HTTPS/`:3443` dokumentiert: Klick-durch-Ausnahme bei selbstsigniertem Zertifikat reicht für die Service-Worker-Registrierung nicht aus (`SecurityError`), Zertifikat muss zusätzlich als vertrauenswürdige CA importiert werden — Anleitung für Linux-Desktop (NSS/`certutil`), Android und iOS ergänzt (s. „Push-Benachrichtigungen im Detail", App-Versionshistorie 0.6.1); veraltete Let's-Encrypt-Notiz für Mobil-Push-Testing entfernt |

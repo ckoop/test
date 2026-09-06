@@ -17,7 +17,7 @@ import FloatingWidget, { usePipWidget } from './FloatingWidget'
 
 dayjs.extend(isoWeek)
 
-export const APP_VERSION = '0.6.0'
+export const APP_VERSION = '0.6.1'
 
 const NAV = [
   { to: '/',        label: 'Timer',   Icon: IcoTimer   },
