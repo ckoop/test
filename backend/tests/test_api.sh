@@ -225,7 +225,25 @@ else
   expect_jq "Phase nach Stop ist null" '.phase' "null"
 fi
 
-# ── 7. Mail-Konfiguration (nur Lesezugriff, kein Versand) ───────────────────
+# ── 7. Push-Einstellungen ─────────────────────────────────────────────────────
+
+echo "== Push-Einstellungen =="
+
+curl_json GET /push/settings
+expect_status "Push-Einstellungen abrufen" 200
+ORIGINAL_PUSH_INTERVAL=$(echo "$BODY_OUT" | jq -r '.interval_seconds')
+
+curl_json PUT /push/settings '{"interval_seconds": 30}'
+expect_status "Push-Intervall aktualisieren" 200
+expect_jq "Push-Intervall auf 30 gesetzt" '.interval_seconds' "30"
+
+curl_json GET /push/settings
+expect_jq "Push-Intervall bleibt persistent" '.interval_seconds' "30"
+
+curl_json PUT /push/settings "{\"interval_seconds\": $ORIGINAL_PUSH_INTERVAL}"
+expect_status "Push-Intervall zurueckgesetzt" 200
+
+# ── 8. Mail-Konfiguration (nur Lesezugriff, kein Versand) ───────────────────
 
 echo "== Mail-Konfiguration =="
 curl_json GET /mail/config
@@ -234,7 +252,7 @@ expect_status "Mail-Konfiguration abrufen" 200
 curl_json GET /mail/log
 expect_status "Mail-Log abrufen" 200
 
-# ── 8. Admin-Reset (nur Ablehnungs-Pfad — echter Reset wuerde Produktivdaten loeschen) ──
+# ── 9. Admin-Reset (nur Ablehnungs-Pfad — echter Reset wuerde Produktivdaten loeschen) ──
 
 echo "== Admin-Reset (Negativtest) =="
 

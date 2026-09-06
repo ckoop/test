@@ -202,6 +202,12 @@ timetracker/
 | auth       | String   | Auth-Secret der Subscription                        |
 | created_at | DateTime | Auto                                                |
 
+### `push_settings` (Singleton, id=1)
+| Spalte           | Typ     | Beschreibung                                                    |
+|------------------|---------|------------------------------------------------------------------|
+| id               | Integer | Immer `1`                                                       |
+| interval_seconds | Integer | Abstand zwischen periodischen Pushes (Default `240`, s. `_push_loop()`) |
+
 ---
 
 ## API Endpoints
@@ -295,6 +301,8 @@ timetracker/
 | GET    | /api/push/public-key    | VAPID Public Key (für `pushManager.subscribe()`)                     |
 | POST   | /api/push/subscribe     | Body: `{ endpoint, keys: { p256dh, auth } }` — Upsert per `endpoint`  |
 | POST   | /api/push/unsubscribe   | Body: `{ endpoint }`                                                  |
+| GET    | /api/push/settings      | `{ interval_seconds }` — serverweit, gilt für alle Geräte             |
+| PUT    | /api/push/settings      | Body: beliebige Teilmenge (aktuell nur `interval_seconds`)             |
 
 ---
 
@@ -490,7 +498,7 @@ Mobiles Pendant zum Schwebenden Fenster (siehe oben) — Document Picture-in-Pic
 **Subscription-Flow:** `usePushSubscription()` (`hooks/usePushSubscription.js`) fragt Notification-Permission an, holt den VAPID Public Key von `GET /api/push/public-key`, ruft `registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey })` auf und schickt die Subscription (`endpoint`, `keys.p256dh`, `keys.auth`) an `POST /api/push/subscribe` — Upsert per `endpoint` in `push_subscriptions`. Toggle „Push bei laufendem Timer" in `PushSettingsCard` (`SettingsPage.jsx`), pro Gerät (jede Browser-Subscription ist geräte-/browserspezifisch, kein globaler Schalter).
 
 **Versand (`main.py`):** `_send_push_to_all()` verschickt per `pywebpush`/VAPID an alle gespeicherten Subscriptions; entfernt dabei automatisch abgelaufene/widerrufene Subscriptions (HTTP 404/410 von der Push-Service-Antwort). Zwei Auslöser:
-1. **`_push_loop()`** — Hintergrund-Task analog `_pomodoro_loop()`/`_imap_loop()`, prüft alle 20s, sendet aber nur alle `PUSH_INTERVAL_SECONDS` (~4 Min, wegen Akku/Traffic) solange ein Timer läuft (nicht pausiert) oder eine Pomodoro-Phase aktiv ist.
+1. **`_push_loop()`** — Hintergrund-Task analog `_pomodoro_loop()`/`_imap_loop()`, prüft alle 20s, sendet aber nur alle `push_settings.interval_seconds` (Default 240s ~4 Min, wegen Akku/Traffic; konfigurierbar in den Settings, s. `PushSettingsCard` → `GET`/`PUT /api/push/settings`) solange ein Timer läuft (nicht pausiert) oder eine Pomodoro-Phase aktiv ist.
 2. **Sofort bei Pomodoro-Phasenwechsel** — Aufruf direkt in `_advance_pomodoro_phase()`, analog zur lokalen Browser-Notification in `usePomodoro.js`, aber serverseitig (funktioniert auch wenn die App im Hintergrund/geschlossen ist).
 
 **Service Worker (`public/sw.js`):** `push`-Event parst das JSON-Payload (`{title, body}`) und zeigt es via `registration.showNotification()` mit festem `tag: 'epoch-timer'` — ersetzt die vorherige Notification statt zu stapeln. `notificationclick` fokussiert ein offenes Fenster oder öffnet die App neu.
@@ -733,8 +741,8 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 - **Fix/Kleinigkeit ohne neues Feature** → nur PATCH hoch (z.B. `0.2.0` → `0.2.1`)
 - **MAJOR** (`1.0.0` etc.) → nie eigenmächtig, vorher immer beim Nutzer nachfragen
 
-**Aktuelle App-Version: 0.6.1**
-**Aktuelle Doku-Version: v4.21**
+**Aktuelle App-Version: 0.7.0**
+**Aktuelle Doku-Version: v4.22**
 
 ### App-Versionshistorie
 
@@ -750,6 +758,7 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 | 0.5.1   | Fix: PWA-Icon fürs Installieren auf dem Handy fehlte — `manifest.json` referenzierte `icon-192.png`/`icon-512.png`, die nie existierten (nur die `favicon.svg` war vorhanden), daher zeigte „Zum Startbildschirm hinzufügen" kein Icon. Beide PNGs aus der `favicon.svg` gerendert, dazu `apple-touch-icon.png` (180×180) ergänzt und in `index.html` verlinkt (iOS Safari nutzt das Manifest kaum und braucht einen eigenen `<link>`-Tag) |
 | 0.6.0   | Merge `feature/push-notifications`: Web-Push-Benachrichtigungen für laufenden Timer/Pomodoro als Mobile-Pendant zum Schwebenden Fenster (erster Service Worker, `push_subscriptions`-Tabelle, `/api/push/*`, VAPID/`pywebpush`, `PushSettingsCard`), dazu Branch-Badge in der Sidebar für Builds abseits von `main` (s. „Push-Benachrichtigungen im Detail") |
 | 0.6.1   | Fix: Fehlschlagende Service-Worker-Registrierung (z. B. `SecurityError` bei nicht vertrauenswürdigem HTTPS-Zertifikat) wurde in `main.jsx` bisher komplett lautlos verschluckt (`.catch(() => {})`), wodurch der Push-Toggle ohne jeden erkennbaren Grund dauerhaft deaktiviert blieb. Loggt den Fehler jetzt in die Konsole (`console.error`) — kein UI-Verhalten geändert, nur Diagnose beim Debuggen erleichtert (s. „Push-Benachrichtigungen im Detail") |
+| 0.7.0   | Push-Intervall konfigurierbar: neue Singleton-Tabelle `push_settings` (`interval_seconds`, Default 240), `GET`/`PUT /api/push/settings`, `_push_loop()` liest den Wert jetzt aus der DB statt der bisherigen fest verdrahteten `PUSH_INTERVAL_SECONDS`-Konstante. UI dafür in `PushSettingsCard` (`SettingsPage.jsx`) — serverweite Einstellung, gilt für alle Geräte gemeinsam (anders als der Push-Subscribe-Toggle, der pro Gerät ist) |
 
 ### Doku-Versionshistorie
 
@@ -789,3 +798,4 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 | v4.19   | HTTPS mit selbstsigniertem Zertifikat dokumentiert (neuer Abschnitt „HTTPS (selbstsigniertes Zertifikat)"), Dateistruktur um `EditEntryModal.jsx`/`locations.conf`/`docker-entrypoint.sh` ergänzt, veraltete Zeitzonen-Zeile in „Bekannte Einschränkungen" korrigiert, PiP-Einschränkung um Secure-Context-Hinweis ergänzt, Push-TODO aktualisiert (HTTPS-Voraussetzung erfüllt) (s. App-Versionshistorie 0.5.0) |
 | v4.20   | Merge des `feature/push-notifications`-Branches: Web-Push-Notifications als Mobile-Pendant zum Schwebenden Fenster (erster Service Worker im Projekt `public/sw.js`, `push_subscriptions`-Tabelle, `/api/push/*`-Endpoints, `_push_loop()` + Sofort-Push bei Pomodoro-Phasenwechsel per `pywebpush`/VAPID, `PushSettingsCard` mit Subscribe-Toggle) sowie Branch-Badge in der Sidebar (⎇, Amber) für Builds abseits von `main` — Branch-Name via `git rev-parse` in `vite.config.js` zur Build-Zeit ermittelt, Docker-Fallback über `VITE_GIT_BRANCH`/Dockerfile-`ARG GIT_BRANCH` (s. App-Versionshistorie 0.6.0) |
 | v4.21   | Push-Notification-Testing über HTTPS/`:3443` dokumentiert: Klick-durch-Ausnahme bei selbstsigniertem Zertifikat reicht für die Service-Worker-Registrierung nicht aus (`SecurityError`), Zertifikat muss zusätzlich als vertrauenswürdige CA importiert werden — Anleitung für Linux-Desktop (NSS/`certutil`), Android und iOS ergänzt (s. „Push-Benachrichtigungen im Detail", App-Versionshistorie 0.6.1); veraltete Let's-Encrypt-Notiz für Mobil-Push-Testing entfernt |
+| v4.22   | Push-Intervall konfigurierbar (neue `push_settings`-Tabelle, `GET`/`PUT /api/push/settings`, `PushSettingsCard`) — DB-Schema- und Endpoint-Tabellen sowie „Push-Benachrichtigungen im Detail" entsprechend ergänzt, veraltete `PUSH_INTERVAL_SECONDS`-Konstante aus der Doku entfernt (s. App-Versionshistorie 0.7.0) |

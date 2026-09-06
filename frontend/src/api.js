@@ -67,7 +67,9 @@ export const api = {
   stopPomodoro:           () => req('/pomodoro/stop', { method: 'POST' }),
 
   // Push
-  getPushPublicKey: () => req('/push/public-key'),
-  subscribePush:    (sub) => req('/push/subscribe', { method: 'POST', body: JSON.stringify(sub) }),
-  unsubscribePush:  (endpoint) => req('/push/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint }) }),
+  getPushPublicKey:   () => req('/push/public-key'),
+  subscribePush:      (sub) => req('/push/subscribe', { method: 'POST', body: JSON.stringify(sub) }),
+  unsubscribePush:    (endpoint) => req('/push/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint }) }),
+  getPushSettings:    () => req('/push/settings'),
+  updatePushSettings: (settings) => req('/push/settings', { method: 'PUT', body: JSON.stringify(settings) }),
 }

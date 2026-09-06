@@ -88,6 +88,12 @@ class PushSubscription(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class PushSettings(Base):
+    __tablename__ = "push_settings"
+    id               = Column(Integer, primary_key=True, default=1)
+    interval_seconds = Column(Integer, nullable=False, default=240)
+
+
 class PomodoroState(Base):
     __tablename__ = "pomodoro_state"
     id                    = Column(Integer, primary_key=True, default=1)
@@ -142,7 +148,7 @@ def _seed_projects():
 _seed_projects()
 
 
-# ── Seed Pomodoro singleton rows ──────────────────────────────────────────────
+# ── Seed Pomodoro + Push singleton rows ───────────────────────────────────────
 def _seed_pomodoro():
     db = SessionLocal()
     try:
@@ -150,6 +156,8 @@ def _seed_pomodoro():
             db.add(PomodoroSettings(id=1))
         if db.query(PomodoroState).count() == 0:
             db.add(PomodoroState(id=1))
+        if db.query(PushSettings).count() == 0:
+            db.add(PushSettings(id=1))
         db.commit()
     finally:
         db.close()
@@ -297,6 +305,13 @@ class PushSubscribeRequest(BaseModel):
 
 class PushUnsubscribeRequest(BaseModel):
     endpoint: str
+
+class PushSettingsOut(BaseModel):
+    interval_seconds: int
+    model_config = {"from_attributes": True}
+
+class PushSettingsUpdate(BaseModel):
+    interval_seconds: Optional[int] = None
 
 
 # ── Mail config helpers ─────────────────────────────────────────────────────────
@@ -1275,6 +1290,21 @@ def push_unsubscribe(body: PushUnsubscribeRequest, db: Session = Depends(get_db)
     db.commit()
     return {"ok": True}
 
+def _get_push_settings(db: Session) -> PushSettings:
+    return db.query(PushSettings).filter(PushSettings.id == 1).first()
+
+@app.get("/api/push/settings", response_model=PushSettingsOut)
+def get_push_settings(db: Session = Depends(get_db)):
+    return _get_push_settings(db)
+
+@app.put("/api/push/settings", response_model=PushSettingsOut)
+def update_push_settings(body: PushSettingsUpdate, db: Session = Depends(get_db)):
+    settings = _get_push_settings(db)
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(settings, field, value)
+    db.commit(); db.refresh(settings)
+    return settings
+
 
 def _send_push_to_all(db: Session, title: str, body: str) -> None:
     """Send a Web Push notification to every stored subscription; prunes dead ones (404/410)."""
@@ -1335,11 +1365,11 @@ async def _pomodoro_loop():
             log.error(f"Pomodoro loop error: {ex}")
         await asyncio.sleep(2)
 
-PUSH_INTERVAL_SECONDS = 240  # ~4 min between periodic pushes while a session is active
 _last_periodic_push = 0.0
 
 async def _push_loop():
     """Sends a periodic push with the running timer/pomodoro state to all subscriptions.
+    Interval is configurable (PushSettings.interval_seconds, default 240s ~4 min, s. /api/push/settings).
     Immediate pushes on pomodoro phase change happen separately in _advance_pomodoro_phase()."""
     global _last_periodic_push
     while True:
@@ -1350,8 +1380,9 @@ async def _push_loop():
                 active_entry = db.query(TimeEntry).filter(TimeEntry.end_time == None).first()
                 running_entry = active_entry if (active_entry and active_entry.paused_at is None) else None
                 session_active = bool(state.phase) or running_entry is not None
+                interval_seconds = _get_push_settings(db).interval_seconds
                 now_ts = datetime.utcnow().timestamp()
-                if session_active and now_ts - _last_periodic_push >= PUSH_INTERVAL_SECONDS:
+                if session_active and now_ts - _last_periodic_push >= interval_seconds:
                     body = None
                     if state.phase and state.phase_start:
                         elapsed_min = int((datetime.utcnow() - state.phase_start).total_seconds() // 60)

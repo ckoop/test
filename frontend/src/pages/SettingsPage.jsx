@@ -321,6 +321,19 @@ function IdleSettingsCard() {
 
 function PushSettingsCard() {
   const { isSupported, subscribed, busy, error, subscribe, unsubscribe } = usePushSubscription()
+  const [intervalSeconds, setIntervalSeconds] = useState(null)
+  const [saving, setSaving]               = useState(false)
+  const [intervalError, setIntervalError] = useState(null)
+
+  useEffect(() => { api.getPushSettings().then(s => setIntervalSeconds(s.interval_seconds)).catch(e => setIntervalError(e.message)) }, [])
+
+  const handleSaveInterval = async () => {
+    setSaving(true); setIntervalError(null)
+    try {
+      const updated = await api.updatePushSettings({ interval_seconds: intervalSeconds })
+      setIntervalSeconds(updated.interval_seconds)
+    } catch (e) { setIntervalError(e.message) } finally { setSaving(false) }
+  }
 
   return (
     <div className="card" style={{ marginBottom: 16 }}>
@@ -343,6 +356,20 @@ function PushSettingsCard() {
       ) : (
         <div style={{ fontSize: 12, color: 'var(--text3)' }}>
           Dieser Browser unterstützt keine Push-Benachrichtigungen (auf iOS z. B. nur nach „Zum Home-Bildschirm hinzufügen").
+        </div>
+      )}
+      {intervalSeconds !== null && (
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border2)' }}>
+          <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>
+            Wie oft die laufende Zeit erneut als Push geschickt wird, solange eine Session aktiv ist — gilt serverweit für alle Geräte (unabhängig vom Sofort-Push bei Pomodoro-Phasenwechsel).
+          </div>
+          <div style={{ maxWidth: 160, marginBottom: 10 }}>
+            <NumberField label="Intervall (Sek.)" value={intervalSeconds} onChange={setIntervalSeconds} />
+          </div>
+          {intervalError && <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 8 }}>{intervalError}</div>}
+          <button className="btn btn-primary" onClick={handleSaveInterval} disabled={saving}>
+            {saving ? '…' : '✓ Speichern'}
+          </button>
         </div>
       )}
     </div>
