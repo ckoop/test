@@ -447,7 +447,11 @@ Beispiel (Juli 2026): 11 Tage mit Tages-Überstunden, aber nur `Support` hatte a
 
 **`cycles_completed`** zählt abgeschlossene Arbeitsintervalle hochlaufend, resettet nicht automatisch nach einer langen Pause (nur bei `/stop`) — `cycles_completed % cycles_before_long_break` ergibt die Position im aktuellen Zyklus für die Punkte-Anzeige in der `PomodoroCard`.
 
-**Benachrichtigung bei Phasenwechsel:** `usePomodoro.js` erkennt Phasenwechsel durch Vergleich mit dem vorherigen Poll-Ergebnis (Polling alle 5s + bei `visibilitychange`/`focus`, gleiches Muster wie der aktive Timer) und feuert dann optional Sound (Web-Audio-API-Oszillator-Beep, kein Audio-Asset im Repo nötig) und/oder Browser-`Notification`, je nach `sound_enabled`/`notifications_enabled` in den Pomodoro-Settings. Notification-Permission wird beim ersten Start einer Session bzw. beim Aktivieren in den Settings angefragt.
+**Benachrichtigung bei Phasenwechsel:** `usePomodoro.js` erkennt Phasenwechsel durch Vergleich mit dem vorherigen Poll-Ergebnis (Polling alle 5s + bei `visibilitychange`/`focus`, gleiches Muster wie der aktive Timer) und feuert dann optional Sound (`playPhaseSound()`) und/oder Browser-`Notification` (`notifyPhaseChange()`), je nach `sound_enabled`/`notifications_enabled` in den Pomodoro-Settings:
+- **Ton:** reiner Web-Audio-API-Oszillator-Beep (`beep()`), kein Audio-Asset im Repo nötig — zwei kurze hohe Töne (880 Hz) beim Start einer **Arbeitsphase**, ein einzelner tieferer Ton (660 Hz) bei **Pausen**, akustisch unterscheidbar.
+- **Benachrichtigungen:** lokale Browser-`Notification` ("Epoch — Pomodoro" / "{Phase} beginnt"). Permission wird beim ersten Start einer Session bzw. beim Aktivieren in den Settings angefragt.
+
+Beide laufen **rein clientseitig im offenen Tab** (Erkennung nur per Polling-Vergleich, kein Hintergrund-Mechanismus) — im Gegensatz zu den Web-Push-Benachrichtigungen (s. „Push-Benachrichtigungen im Detail" unten), die auch bei geschlossenem Tab/im Hintergrund ankommen. Beide Systeme laufen unabhängig nebeneinander und können gleichzeitig aktiv sein.
 
 **`usePomodoro()` läuft zentral in `App.jsx`** (nicht in `TimerPage.jsx`) — genau wie `activeTimer` — und wird per Prop an `TimerPage` durchgereicht. Grund: nur so ist der Zustand app-weit bekannt, unabhängig davon welche Seite gerade offen ist (nötig für die Navigationssperre, siehe unten, und damit Sound/Notification/Cross-Device-Sync nicht nur auf der Timer-Seite funktionieren).
 
@@ -742,7 +746,7 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 - **MAJOR** (`1.0.0` etc.) → nie eigenmächtig, vorher immer beim Nutzer nachfragen
 
 **Aktuelle App-Version: 0.7.0**
-**Aktuelle Doku-Version: v4.22**
+**Aktuelle Doku-Version: v4.23**
 
 ### App-Versionshistorie
 
@@ -799,3 +803,4 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 | v4.20   | Merge des `feature/push-notifications`-Branches: Web-Push-Notifications als Mobile-Pendant zum Schwebenden Fenster (erster Service Worker im Projekt `public/sw.js`, `push_subscriptions`-Tabelle, `/api/push/*`-Endpoints, `_push_loop()` + Sofort-Push bei Pomodoro-Phasenwechsel per `pywebpush`/VAPID, `PushSettingsCard` mit Subscribe-Toggle) sowie Branch-Badge in der Sidebar (⎇, Amber) für Builds abseits von `main` — Branch-Name via `git rev-parse` in `vite.config.js` zur Build-Zeit ermittelt, Docker-Fallback über `VITE_GIT_BRANCH`/Dockerfile-`ARG GIT_BRANCH` (s. App-Versionshistorie 0.6.0) |
 | v4.21   | Push-Notification-Testing über HTTPS/`:3443` dokumentiert: Klick-durch-Ausnahme bei selbstsigniertem Zertifikat reicht für die Service-Worker-Registrierung nicht aus (`SecurityError`), Zertifikat muss zusätzlich als vertrauenswürdige CA importiert werden — Anleitung für Linux-Desktop (NSS/`certutil`), Android und iOS ergänzt (s. „Push-Benachrichtigungen im Detail", App-Versionshistorie 0.6.1); veraltete Let's-Encrypt-Notiz für Mobil-Push-Testing entfernt |
 | v4.22   | Push-Intervall konfigurierbar (neue `push_settings`-Tabelle, `GET`/`PUT /api/push/settings`, `PushSettingsCard`) — DB-Schema- und Endpoint-Tabellen sowie „Push-Benachrichtigungen im Detail" entsprechend ergänzt, veraltete `PUSH_INTERVAL_SECONDS`-Konstante aus der Doku entfernt (s. App-Versionshistorie 0.7.0) |
+| v4.23   | „Pomodoro-Timer im Detail" präzisiert: Ton (Frequenz-Unterschied Arbeit/Pause) und Benachrichtigungen laufen rein clientseitig im offenen Tab, unabhängig von und zusätzlich zu den Web-Push-Benachrichtigungen (Doku, kein Code) |
