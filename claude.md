@@ -87,7 +87,8 @@ timetracker/
     │   ├── favicon-dev.svg           # Gleiche Form, Rot statt Grün — nur lokal aktiv (s. „Docker Multi-Stage")
     │   ├── icon-192.png              # Aus favicon.svg gerendert — Android/Chrome "App installieren" (Manifest-Icon)
     │   ├── icon-512.png              # Dito, größere Auflösung (Manifest-Icon)
-    │   └── apple-touch-icon.png      # 180×180, dito — iOS Safari ignoriert das Manifest weitgehend und braucht einen eigenen <link rel="apple-touch-icon"> in index.html
+    │   ├── apple-touch-icon.png      # 180×180, dito — iOS Safari ignoriert das Manifest weitgehend und braucht einen eigenen <link rel="apple-touch-icon"> in index.html
+    │   └── sw.js                     # Erster Service Worker im Projekt — push-Event → showNotification(), notificationclick → App fokussieren/öffnen (s. „Push-Benachrichtigungen im Detail")
     └── src/
         ├── main.jsx
         ├── App.jsx                  # Routing + BottomNav (7 Tabs)
@@ -98,7 +99,8 @@ timetracker/
         │   ├── useTimer.js          # Live-Timer Hook + Format-Helpers + Overtime
         │   ├── useProjects.js       # Shared project list mit Cache + invalidation
         │   ├── usePomodoro.js       # Pomodoro-Polling + Countdown + Sound/Notification
-        │   └── useIdleDetection.js  # Erkennt Inaktivität via visibilitychange, liefert Deduct-Prompt, Schwelle pro Gerät konfigurierbar
+        │   ├── useIdleDetection.js  # Erkennt Inaktivität via visibilitychange, liefert Deduct-Prompt, Schwelle pro Gerät konfigurierbar
+        │   └── usePushSubscription.js # Permission anfragen, VAPID Key holen, pushManager.subscribe(), Subscription ans Backend senden (s. „Push-Benachrichtigungen im Detail")
         └── pages/
             ├── TimerPage.jsx        # Timer + Pomodoro-Card + manuelle Einträge + Tagesnotiz + Report
             ├── WeekPage.jsx         # Wochenübersicht + Balkendiagramm
@@ -106,7 +108,7 @@ timetracker/
             ├── StatsPage.jsx        # Monatsstatistiken + Recharts, Projekt-Filter im Balkendiagramm, Überstunden Pro Tag/Pro Projekt
             ├── MailPage.jsx         # Mail-Status + Report senden + IMAP Poll + Log
             ├── ExportPage.jsx       # CSV / JSON Export + Tageszusammenfassung (Text, Vorschau + .txt-Download)
-            ├── SettingsPage.jsx     # Projektverwaltung (neu/umbenennen/Farbe/archiv) + Pomodoro- + Idle-Einstellungen
+            ├── SettingsPage.jsx     # Projektverwaltung (neu/umbenennen/Farbe/archiv) + Pomodoro- + Idle- + Push-Einstellungen (PushSettingsCard)
             ├── OvertimeBanner.jsx   # Überstunden-Anzeige (compact + full)
             ├── ManualEntryModal.jsx # Shared Modal für manuelle Einträge (rechnet lokale Zeit ↔ UTC um, s. useTimer.js)
             └── EditEntryModal.jsx   # Shared Modal zum Bearbeiten bestehender Einträge — in Timer, Verlauf und Woche
@@ -189,6 +191,15 @@ timetracker/
 | subject    | String   | Mail-Betreff                                        |
 | status     | String   | `"ok"` / `"parsed"` / `"error"`                   |
 | detail     | Text     | z.B. „2 Einträge erstellt" oder Fehlermeldung       |
+| created_at | DateTime | Auto                                                |
+
+### `push_subscriptions`
+| Spalte     | Typ      | Beschreibung                                        |
+|------------|----------|-----------------------------------------------------|
+| id         | Integer  | Primary Key                                         |
+| endpoint   | String   | Push-Endpoint-URL des Browsers, unique              |
+| p256dh     | String   | Public Key der Subscription (Verschlüsselung)       |
+| auth       | String   | Auth-Secret der Subscription                        |
 | created_at | DateTime | Auto                                                |
 
 ---
@@ -278,6 +289,13 @@ timetracker/
 |--------|-----------------|---------------------------------------------------------------------------|
 | POST   | /api/admin/reset | Body: `{ confirm: "ZURUECKSETZEN" }`. Löscht **alle** `time_entries`/`day_notes`/`mail_log`/`projects` und setzt Pomodoro-Settings/-State zurück; danach werden die 6 Standardprojekte (`DEFAULT_PROJECTS`) neu angelegt. Falsches/fehlendes `confirm` → 400, keine Änderung |
 
+### Push
+| Method | Path                    | Beschreibung                                                          |
+|--------|-------------------------|-------------------------------------------------------------------------|
+| GET    | /api/push/public-key    | VAPID Public Key (für `pushManager.subscribe()`)                     |
+| POST   | /api/push/subscribe     | Body: `{ endpoint, keys: { p256dh, auth } }` — Upsert per `endpoint`  |
+| POST   | /api/push/unsubscribe   | Body: `{ endpoint }`                                                  |
+
 ---
 
 ## Umgebungsvariablen (`.env`)
@@ -299,9 +317,14 @@ IMAP_USER=epoch@example.com
 IMAP_PASSWORD=secret
 IMAP_FOLDER=INBOX
 IMAP_POLL_INTERVAL=3600    # Sekunden — Backup; primärer Weg ist der manuelle "Jetzt abrufen"-Button
+
+# Web Push (VAPID) – Push-Benachrichtigungen bei laufendem Timer/Pomodoro
+VAPID_PUBLIC_KEY=...
+VAPID_PRIVATE_KEY=...
+VAPID_CLAIM_EMAIL=du@example.com   # für den mailto:-Claim gegenüber dem Push-Dienst
 ```
 
-Alle Variablen optional — fehlen Credentials, ist Mail deaktiviert.
+Alle Variablen optional — fehlen Credentials, ist Mail bzw. Push deaktiviert. VAPID-Schlüsselpaar einmalig generieren (z.B. via `py_vapid`, das mit `pywebpush` installiert wird) und lokal in `.env` eintragen.
 
 ---
 
@@ -460,6 +483,22 @@ Erkennt, wenn der Rechner gesperrt oder der Tab/die App längere Zeit im Hinterg
 
 ---
 
+## Push-Benachrichtigungen im Detail
+
+Mobiles Pendant zum Schwebenden Fenster (siehe oben) — Document Picture-in-Picture ist Desktop-only, auf dem Handy übernimmt eine **Web-Push-Notification** die laufende Timer-/Pomodoro-Anzeige, solange eine Session aktiv ist. Kein echtes "sticky/ongoing" Notification wie bei nativen Apps möglich (Nutzer kann sie wegwischen, sie kommt erst beim nächsten Update-Zyklus wieder) — aber der beste erreichbare Kompromiss auf Mobil-Web. Führt den **ersten Service Worker** im Projekt ein (`public/sw.js`) — bricht mit der bisherigen bewussten Einschränkung „PWA ohne Service Worker".
+
+**Subscription-Flow:** `usePushSubscription()` (`hooks/usePushSubscription.js`) fragt Notification-Permission an, holt den VAPID Public Key von `GET /api/push/public-key`, ruft `registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey })` auf und schickt die Subscription (`endpoint`, `keys.p256dh`, `keys.auth`) an `POST /api/push/subscribe` — Upsert per `endpoint` in `push_subscriptions`. Toggle „Push bei laufendem Timer" in `PushSettingsCard` (`SettingsPage.jsx`), pro Gerät (jede Browser-Subscription ist geräte-/browserspezifisch, kein globaler Schalter).
+
+**Versand (`main.py`):** `_send_push_to_all()` verschickt per `pywebpush`/VAPID an alle gespeicherten Subscriptions; entfernt dabei automatisch abgelaufene/widerrufene Subscriptions (HTTP 404/410 von der Push-Service-Antwort). Zwei Auslöser:
+1. **`_push_loop()`** — Hintergrund-Task analog `_pomodoro_loop()`/`_imap_loop()`, prüft alle 20s, sendet aber nur alle `PUSH_INTERVAL_SECONDS` (~4 Min, wegen Akku/Traffic) solange ein Timer läuft (nicht pausiert) oder eine Pomodoro-Phase aktiv ist.
+2. **Sofort bei Pomodoro-Phasenwechsel** — Aufruf direkt in `_advance_pomodoro_phase()`, analog zur lokalen Browser-Notification in `usePomodoro.js`, aber serverseitig (funktioniert auch wenn die App im Hintergrund/geschlossen ist).
+
+**Service Worker (`public/sw.js`):** `push`-Event parst das JSON-Payload (`{title, body}`) und zeigt es via `registration.showNotification()` mit festem `tag: 'epoch-timer'` — ersetzt die vorherige Notification statt zu stapeln. `notificationclick` fokussiert ein offenes Fenster oder öffnet die App neu.
+
+**HTTPS Pflicht** für Service Worker + Push (außer `localhost`, gilt als sicherer Kontext) — echtes Push-Testing auf einem Handy ist daher erst nach dem Let's-Encrypt-Rollout möglich (separates TODO, siehe Backup-Punkt unten). iOS nur wenn die PWA per „Zum Home-Bildschirm hinzufügen" installiert ist, iOS ≥ 16.4, stärker eingeschränkt als Android.
+
+---
+
 ## Export: Tageszusammenfassung im Detail
 
 Läuft komplett **client-seitig** in `ExportPage.jsx`, kein eigener Backend-Endpoint (es gab kurzzeitig einen serverseitig aggregierenden `/api/export/summary`, der wurde wieder entfernt — die gewünschte Struktur braucht keine Summierung mehr, siehe unten). Datengrundlage ist das ohnehin vorhandene `GET /api/entries` (gefiltert auf `end_time` gesetzt, also nur abgeschlossene Einträge).
@@ -602,24 +641,22 @@ Manche Browser-APIs verlangen einen **Secure Context** (HTTPS oder `localhost`) 
 
 ## TODO / Geplante Features
 
-### Mobiles Pendant zum Schwebenden Fenster (Web-Push-Notification)
+### Backup-Lösung für SQLite-Volume
 
-Document Picture-in-Picture (siehe „Schwebendes Fenster (Floating Widget) im Detail" oben) ist Desktop-only — auf dem Handy (Android/iOS) fehlt die API komplett. Geplanter Ersatz: eine sich periodisch aktualisierende **Push-Notification** mit laufender Timer-/Pomodoro-Zeit, solange eine Session aktiv ist. Kein echtes "sticky/ongoing" Notification wie bei nativen Apps möglich (Nutzer kann sie wegwischen, sie kommt erst beim nächsten Update-Zyklus wieder) — aber der beste erreichbare Kompromiss auf Mobil-Web.
+Aktuell kein automatisiertes Backup — die DB liegt ausschließlich im Docker-Volume `timetracker-data` (lokal auf dem Host, s. Architektur oben), ein Datenverlust bei Volume-Löschung/Host-Crash wäre nicht wiederherstellbar.
 
 **Schritte:**
-1. VAPID-Schlüsselpaar generieren (einmalig)
-2. Backend: Tabelle `push_subscriptions` (endpoint, keys, angelegt am) + `POST /api/push/subscribe` / `/unsubscribe`
-3. Backend: `_push_loop()` — Hintergrund-Task analog zu `_pomodoro_loop()`, sendet Update alle ~3–5 Min (statt sekündlich, wegen Akku/Traffic) an alle Subscriptions solange Timer/Pomodoro aktiv, per `pywebpush`; ersetzt Notification via festem `tag` statt zu stapeln; zusätzlich sofortiges Update bei Pomodoro-Phasenwechsel
-4. Frontend: erster Service Worker im Projekt (`public/sw.js`) — `push`-Event → `registration.showNotification()`, `notificationclick` → App öffnen
-5. Frontend: Subscribe-Flow (Permission anfragen, `pushManager.subscribe()`, Subscription ans Backend senden), Settings-Toggle „Push bei laufendem Timer"
-6. Testing auf echtem Handy (Push lässt sich in Chrome-Devtools nicht zuverlässig simulieren)
+1. Backup-Skript (`backup.sh`): Hilfscontainer mountet Volume + Zielverzeichnis, packt `timetracker.db` als `tar.gz` mit Datumsstempel
+2. Vor dem Backup Backend kurz stoppen (`docker compose stop backend`) für konsistenten Snapshot, danach wieder starten — Alternative `docker cp` aus laufendem Container ist einfacher, aber nicht garantiert konsistent
+3. Rotation/Aufbewahrung klären (z. B. letzte 7 Tage + letzte 4 Wochen behalten, ältere löschen)
+4. Ablagespeicherort für Backups festlegen (externe Platte, NAS, Cloud-Storage?) — noch offen
+5. Automatisierung per Cron auf dem Host, der `docker compose` ausführt
 
-**Aufwand:** ~1–1,5 Tage fokussierte Arbeit.
+**Aufwand:** ~1–2 Stunden für Skript + Cron, je nach gewähltem Ablageort ggf. mehr.
 
 **Zu beachten:**
-- Führt den **ersten Service Worker** im Projekt ein — bricht mit der bisherigen bewussten Einschränkung „PWA ohne Service Worker" (s. o.); architektonischer Schritt, nicht nur ein Feature-Häkchen
-- **HTTPS Pflicht** für Service Worker + Push (außer `localhost`) — erfüllt seit dem selbstsignierten Zertifikat (s. „HTTPS (selbstsigniertes Zertifikat)"); kein Let's-Encrypt-Rollout mehr nötig, Voraussetzung ist also schon da
-- iOS nur wenn PWA per „Zum Home-Bildschirm hinzufügen" installiert ist, iOS ≥ 16.4, stärker eingeschränkt als Android
+- Skript muss außerhalb des Repos/Containers laufen (Host-Cron), da es auf den Docker-Socket/Volume-Mount zugreift
+- Restore-Vorgang einmal testen, nicht nur Backup — sonst unklar ob Dump im Ernstfall wirklich nutzbar ist
 
 ---
 
@@ -634,6 +671,13 @@ docker compose down && docker compose up --build
 
 ### Polling-Intervall ändern
 `.env`: `IMAP_POLL_INTERVAL=60` → `docker compose restart backend`
+
+### Branch-Badge in der Sidebar
+Bei einem Build von einem anderen Branch als `main` zeigt die Sidebar unter der Versionsnummer ein Amber-Badge mit dem Branch-Namen (⎇), damit lokale Test-/Feature-Builds nicht mit `main` verwechselt werden. Wird per `git rev-parse --abbrev-ref HEAD` in `vite.config.js` zur Build-Zeit ermittelt (`__GIT_BRANCH__`) — Docker-Build hat kein `.git` im Build-Context (`context: ./frontend`), daher dort Fallback auf `VITE_GIT_BRANCH` (gesetzt via Dockerfile `ARG GIT_BRANCH`, Default `main`). Für sichtbares Badge im Docker-Build explizit mitgeben:
+```bash
+GIT_BRANCH=$(git branch --show-current) docker compose up --build frontend
+```
+`npm run dev`/`vite build` außerhalb Docker erkennen den Branch automatisch, kein Env-Var nötig.
 
 ### Backup
 ```bash
@@ -673,7 +717,7 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 - **Fix/Kleinigkeit ohne neues Feature** → nur PATCH hoch (z.B. `0.2.0` → `0.2.1`)
 - **MAJOR** (`1.0.0` etc.) → nie eigenmächtig, vorher immer beim Nutzer nachfragen
 
-**Aktuelle App-Version: 0.5.1**
+**Aktuelle App-Version: 0.6.0**
 **Aktuelle Doku-Version: v4.20**
 
 ### App-Versionshistorie
@@ -688,6 +732,7 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 | 0.4.1   | Fix: manuelle/bearbeitete Zeiteinträge wurden ohne Zeitzonen-Umrechnung gespeichert — die im `<input type="time">` eingegebene lokale Uhrzeit landete unverändert als vermeintlich-UTC in der DB, wodurch Anzeige und erneutes Bearbeiten stets um den UTC-Offset verschoben waren und eine Korrektur nie ankam. Neue Helper `localTimeToUTC`/`utcToLocalTime` (`hooks/useTimer.js`) rechnen jetzt konsequent um. `EditEntryModal` als eigene Komponente extrahiert (vorher in `TimerPage.jsx` dupliziert) und zusätzlich in Verlauf und Woche verdrahtet — Zeitslots sind jetzt überall bearbeitbar, nicht nur auf der Timer-Seite |
 | 0.5.0   | HTTPS mit selbstsigniertem Zertifikat im bestehenden Nginx (`frontend`-Container): zweiter Server-Block auf Port 443 (extern `3443`), Zertifikat wird beim ersten Start automatisch erzeugt (`docker-entrypoint.sh`), gültige Hostnamen/IPs über `SSL_SAN` (`.env`) konfigurierbar. Schafft den Secure Context, den z.B. das Schwebende Fenster (Document Picture-in-Picture) außerhalb von `localhost` braucht (s. „Bekannte Einschränkungen") — vorher über reines HTTP auf einer LAN-IP nicht verfügbar, unabhängig vom Browser |
 | 0.5.1   | Fix: PWA-Icon fürs Installieren auf dem Handy fehlte — `manifest.json` referenzierte `icon-192.png`/`icon-512.png`, die nie existierten (nur die `favicon.svg` war vorhanden), daher zeigte „Zum Startbildschirm hinzufügen" kein Icon. Beide PNGs aus der `favicon.svg` gerendert, dazu `apple-touch-icon.png` (180×180) ergänzt und in `index.html` verlinkt (iOS Safari nutzt das Manifest kaum und braucht einen eigenen `<link>`-Tag) |
+| 0.6.0   | Merge `feature/push-notifications`: Web-Push-Benachrichtigungen für laufenden Timer/Pomodoro als Mobile-Pendant zum Schwebenden Fenster (erster Service Worker, `push_subscriptions`-Tabelle, `/api/push/*`, VAPID/`pywebpush`, `PushSettingsCard`), dazu Branch-Badge in der Sidebar für Builds abseits von `main` (s. „Push-Benachrichtigungen im Detail") |
 
 ### Doku-Versionshistorie
 
@@ -725,3 +770,4 @@ Bis `v4.12`/App-Anzeige `v4.12` liefen beide Zähler synchron (ein gemeinsamer Z
 | v4.17   | Mail-Import: Betreff-Pflicht „Zeiterfassung", Server-seitiges Löschen nach erfolgreicher Verarbeitung, Poll-Ergebnis-Feedback, Mail-Log löschbar (s. App-Versionshistorie 0.4.0) |
 | v4.18   | Fix Zeitzonen-Offset bei manuellen/bearbeiteten Zeiteinträgen, Bearbeiten-Funktion jetzt auch in Verlauf und Woche (s. App-Versionshistorie 0.4.1) |
 | v4.19   | HTTPS mit selbstsigniertem Zertifikat dokumentiert (neuer Abschnitt „HTTPS (selbstsigniertes Zertifikat)"), Dateistruktur um `EditEntryModal.jsx`/`locations.conf`/`docker-entrypoint.sh` ergänzt, veraltete Zeitzonen-Zeile in „Bekannte Einschränkungen" korrigiert, PiP-Einschränkung um Secure-Context-Hinweis ergänzt, Push-TODO aktualisiert (HTTPS-Voraussetzung erfüllt) (s. App-Versionshistorie 0.5.0) |
+| v4.20   | Merge des `feature/push-notifications`-Branches: Web-Push-Notifications als Mobile-Pendant zum Schwebenden Fenster (erster Service Worker im Projekt `public/sw.js`, `push_subscriptions`-Tabelle, `/api/push/*`-Endpoints, `_push_loop()` + Sofort-Push bei Pomodoro-Phasenwechsel per `pywebpush`/VAPID, `PushSettingsCard` mit Subscribe-Toggle) sowie Branch-Badge in der Sidebar (⎇, Amber) für Builds abseits von `main` — Branch-Name via `git rev-parse` in `vite.config.js` zur Build-Zeit ermittelt, Docker-Fallback über `VITE_GIT_BRANCH`/Dockerfile-`ARG GIT_BRANCH` (s. App-Versionshistorie 0.6.0) |

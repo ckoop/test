@@ -9,6 +9,10 @@ if (import.meta.env.DEV || import.meta.env.VITE_APP_ENV === 'development') {
   if (favicon) favicon.href = '/favicon-dev.svg'
 }
 
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => { /* Push wird dann einfach nicht angeboten */ })
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>

@@ -26,7 +26,12 @@ body { font-family: var(--sans); background: var(--bg); color: var(--text); min-
 
 .sidebar { display: none; }
 .sidebar-logo { font-size: 25px; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; margin-bottom: 3px; }
-.sidebar-version { font-family: var(--mono); font-size: 9px; color: rgba(200,240,96,.5); margin-bottom: 22px; }
+.sidebar-version { font-family: var(--mono); font-size: 9px; color: rgba(200,240,96,.5); margin-bottom: 4px; }
+.sidebar-branch {
+  display: inline-block; font-family: var(--mono); font-size: 9px; color: var(--amber);
+  background: var(--amber-dim); border: 1px solid var(--amber); border-radius: var(--r);
+  padding: 2px 6px; margin-bottom: 18px;
+}
 .sidebar-nav { display: flex; flex-direction: column; gap: 3px; }
 .sidebar-link {
   display: flex; align-items: center; gap: 10px;

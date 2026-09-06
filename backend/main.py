@@ -11,6 +11,7 @@ from pathlib import Path
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import smtplib, ssl
+from pywebpush import webpush, WebPushException
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("epoch")
@@ -76,6 +77,15 @@ class PomodoroSettings(Base):
     auto_start_next          = Column(Integer, nullable=False, default=0)  # bool as int
     sound_enabled            = Column(Integer, nullable=False, default=1)
     notifications_enabled    = Column(Integer, nullable=False, default=1)
+
+
+class PushSubscription(Base):
+    __tablename__ = "push_subscriptions"
+    id         = Column(Integer, primary_key=True, index=True)
+    endpoint   = Column(String(500), nullable=False, unique=True)
+    p256dh     = Column(String(200), nullable=False)
+    auth       = Column(String(100), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class PomodoroState(Base):
@@ -277,6 +287,17 @@ class SendReportRequest(BaseModel):
 class ResetConfirm(BaseModel):
     confirm: str
 
+class PushKeys(BaseModel):
+    p256dh: str
+    auth: str
+
+class PushSubscribeRequest(BaseModel):
+    endpoint: str
+    keys: PushKeys
+
+class PushUnsubscribeRequest(BaseModel):
+    endpoint: str
+
 
 # ── Mail config helpers ─────────────────────────────────────────────────────────
 
@@ -304,6 +325,13 @@ def imap_cfg():
 def mail_configured():
     c = smtp_cfg()
     return bool(c["host"] and c["user"] and c["password"] and c["to"])
+
+def vapid_cfg():
+    return {
+        "public_key":  os.getenv("VAPID_PUBLIC_KEY", ""),
+        "private_key": os.getenv("VAPID_PRIVATE_KEY", ""),
+        "claim_email": os.getenv("VAPID_CLAIM_EMAIL", ""),
+    }
 
 
 # ── App ─────────────────────────────────────────────────────────────────────────
@@ -414,6 +442,8 @@ def get_active(db: Session = Depends(get_db)):
 
 # ── Pomodoro ────────────────────────────────────────────────────────────────────
 
+PHASE_LABELS = {"work": "Arbeit", "short_break": "Kurze Pause", "long_break": "Lange Pause"}
+
 def _phase_duration_minutes(phase: str, settings: PomodoroSettings) -> int:
     return {
         "work": settings.work_minutes,
@@ -459,6 +489,7 @@ def _advance_pomodoro_phase(db: Session) -> PomodoroState:
         state.awaiting_confirmation = 1
 
     db.commit(); db.refresh(state)
+    _send_push_to_all(db, "Epoch — Pomodoro", f"{PHASE_LABELS.get(next_phase, next_phase)} beginnt")
     return state
 
 @app.get("/api/pomodoro/settings", response_model=PomodoroSettingsOut)
@@ -1221,6 +1252,57 @@ def trigger_poll():
         raise HTTPException(500, str(ex))
 
 
+# ── Push ────────────────────────────────────────────────────────────────────────
+
+@app.get("/api/push/public-key")
+def get_push_public_key():
+    return {"public_key": vapid_cfg()["public_key"]}
+
+@app.post("/api/push/subscribe")
+def push_subscribe(body: PushSubscribeRequest, db: Session = Depends(get_db)):
+    sub = db.query(PushSubscription).filter(PushSubscription.endpoint == body.endpoint).first()
+    if sub:
+        sub.p256dh = body.keys.p256dh
+        sub.auth   = body.keys.auth
+    else:
+        db.add(PushSubscription(endpoint=body.endpoint, p256dh=body.keys.p256dh, auth=body.keys.auth))
+    db.commit()
+    return {"ok": True}
+
+@app.post("/api/push/unsubscribe")
+def push_unsubscribe(body: PushUnsubscribeRequest, db: Session = Depends(get_db)):
+    db.query(PushSubscription).filter(PushSubscription.endpoint == body.endpoint).delete()
+    db.commit()
+    return {"ok": True}
+
+
+def _send_push_to_all(db: Session, title: str, body: str) -> None:
+    """Send a Web Push notification to every stored subscription; prunes dead ones (404/410)."""
+    cfg = vapid_cfg()
+    if not cfg["private_key"]:
+        return
+    payload = json_lib.dumps({"title": title, "body": body})
+    sent = 0
+    for sub in db.query(PushSubscription).all():
+        try:
+            webpush(
+                subscription_info={"endpoint": sub.endpoint, "keys": {"p256dh": sub.p256dh, "auth": sub.auth}},
+                data=payload,
+                vapid_private_key=cfg["private_key"],
+                vapid_claims={"sub": f"mailto:{cfg['claim_email']}"},
+            )
+            sent += 1
+        except WebPushException as ex:
+            if ex.response is not None and ex.response.status_code in (404, 410):
+                db.delete(sub)
+            else:
+                log.error(f"Push-Versand fehlgeschlagen: {ex}")
+        except Exception as ex:
+            log.error(f"Push-Versand fehlgeschlagen: {ex}")
+    db.commit()
+    log.info(f'Push "{title}" an {sent} Subscription(s) gesendet')
+
+
 # ── Background IMAP polling loop ─────────────────────────────────────────────────
 
 async def _imap_loop():
@@ -1253,10 +1335,44 @@ async def _pomodoro_loop():
             log.error(f"Pomodoro loop error: {ex}")
         await asyncio.sleep(2)
 
+PUSH_INTERVAL_SECONDS = 240  # ~4 min between periodic pushes while a session is active
+_last_periodic_push = 0.0
+
+async def _push_loop():
+    """Sends a periodic push with the running timer/pomodoro state to all subscriptions.
+    Immediate pushes on pomodoro phase change happen separately in _advance_pomodoro_phase()."""
+    global _last_periodic_push
+    while True:
+        try:
+            db = SessionLocal()
+            try:
+                state = _get_pomodoro_state(db)
+                active_entry = db.query(TimeEntry).filter(TimeEntry.end_time == None).first()
+                running_entry = active_entry if (active_entry and active_entry.paused_at is None) else None
+                session_active = bool(state.phase) or running_entry is not None
+                now_ts = datetime.utcnow().timestamp()
+                if session_active and now_ts - _last_periodic_push >= PUSH_INTERVAL_SECONDS:
+                    body = None
+                    if state.phase and state.phase_start:
+                        elapsed_min = int((datetime.utcnow() - state.phase_start).total_seconds() // 60)
+                        body = f"{PHASE_LABELS.get(state.phase, state.phase)} läuft seit {elapsed_min} min"
+                    elif running_entry:
+                        elapsed_min = int((datetime.utcnow() - running_entry.start_time).total_seconds() // 60)
+                        body = f"{running_entry.project or 'Allgemein'} läuft seit {elapsed_min} min"
+                    if body:
+                        _send_push_to_all(db, "Epoch", body)
+                        _last_periodic_push = now_ts
+            finally:
+                db.close()
+        except Exception as ex:
+            log.error(f"Push loop error: {ex}")
+        await asyncio.sleep(20)
+
 @app.on_event("startup")
 async def startup():
     asyncio.create_task(_imap_loop())
     asyncio.create_task(_pomodoro_loop())
+    asyncio.create_task(_push_loop())
 
 
 # ── Stats ── (monthly already above, add mail stats) ─────────────────────────────

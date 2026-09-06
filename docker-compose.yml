@@ -25,6 +25,10 @@ services:
       - IMAP_PASSWORD=${IMAP_PASSWORD:-}
       - IMAP_FOLDER=${IMAP_FOLDER:-INBOX}
       - IMAP_POLL_INTERVAL=${IMAP_POLL_INTERVAL:-300}
+      # ── Web Push (VAPID) ────────────────────────────────────────────────────
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - VAPID_CLAIM_EMAIL=${VAPID_CLAIM_EMAIL:-}
     networks:
       - app
     healthcheck:
@@ -37,6 +41,8 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        GIT_BRANCH: ${GIT_BRANCH:-main}
     container_name: timetracker-frontend
     restart: unless-stopped
     ports:

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { api } from '../api'
 import { useProjects, invalidateProjects } from '../hooks/useProjects'
 import { useIdleThresholdMinutes, setIdleThresholdMinutes } from '../hooks/useIdleDetection'
+import { usePushSubscription } from '../hooks/usePushSubscription'
 
 const PRESET_COLORS = [
   '#c8f060', '#6699ff', '#ffaa00', '#ff4444',
@@ -74,6 +75,7 @@ export default function SettingsPage() {
 
       <PomodoroSettingsCard />
       <IdleSettingsCard />
+      <PushSettingsCard />
 
       {/* ── New project ── */}
       <div className="card" style={{ marginBottom: 16 }}>
@@ -313,6 +315,36 @@ function IdleSettingsCard() {
       <button className="btn btn-primary" onClick={handleSave} disabled={draft === current}>
         ✓ Speichern
       </button>
+    </div>
+  )
+}
+
+function PushSettingsCard() {
+  const { isSupported, subscribed, busy, error, subscribe, unsubscribe } = usePushSubscription()
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div className="label" style={{ marginBottom: 0 }}>🔔 Push-Benachrichtigungen</div>
+        {isSupported && (
+          <ToggleButton
+            active={subscribed}
+            label={subscribed ? 'Aktiviert' : 'Deaktiviert'}
+            onClick={() => (subscribed ? unsubscribe() : subscribe())}
+          />
+        )}
+      </div>
+      {isSupported ? (
+        <div style={{ fontSize: 12, color: 'var(--text2)' }}>
+          Push bei laufendem Timer — zeigt die laufende Zeit/Pomodoro-Phase als Benachrichtigung, auch wenn Epoch im Hintergrund ist oder der Tab geschlossen wurde. Gilt nur für dieses Gerät.
+          {error && <div style={{ color: 'var(--red)', marginTop: 8 }}>{error}</div>}
+          {busy && <div style={{ color: 'var(--text-3)', marginTop: 8 }}>…</div>}
+        </div>
+      ) : (
+        <div style={{ fontSize: 12, color: 'var(--text3)' }}>
+          Dieser Browser unterstützt keine Push-Benachrichtigungen (auf iOS z. B. nur nach „Zum Home-Bildschirm hinzufügen").
+        </div>
+      )}
     </div>
   )
 }

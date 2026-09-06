@@ -17,7 +17,7 @@ import FloatingWidget, { usePipWidget } from './FloatingWidget'
 
 dayjs.extend(isoWeek)
 
-export const APP_VERSION = '0.5.1'
+export const APP_VERSION = '0.6.0'
 
 const NAV = [
   { to: '/',        label: 'Timer',   Icon: IcoTimer   },
@@ -157,6 +157,9 @@ function Sidebar({ hasActive, isPaused, badges, locked }) {
     <aside className="sidebar">
       <div className="sidebar-logo">Epoch</div>
       <div className="sidebar-version">{APP_VERSION}</div>
+      {__GIT_BRANCH__ !== 'main' && (
+        <div className="sidebar-branch" title="Nicht der main-Branch">⎇ {__GIT_BRANCH__}</div>
+      )}
       <nav className="sidebar-nav">
         {NAV.map(({ to, label, Icon }) => {
           const isLocked = locked && to !== '/'
